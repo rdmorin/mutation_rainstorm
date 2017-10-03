@@ -15,7 +15,7 @@ parser <- ArgumentParser(description="plot a genomic region with mutations and e
 
 parser$add_argument(
     "--input_maf", "-m",
-    help="chromosome you want to show"
+    help="MAF file containing mutation calls from many patient genomes"
     );
 parser$add_argument(
            "--cpu_num","-c",help="set to number of CPUs you would like to use to perform calculation in parallel (consumes lots of RAM)",default=1);
@@ -23,6 +23,8 @@ parser$add_argument(
     "--genome_fai", "-g",
     help="provide the corresponding fasta index for the genome you used. must match the chromosome naming style used in your MAF!", default="hg19.ensembl.fa.fai"
 );
+
+parser$add_argument("--plot","-p",help="ploduce rainstorm plot for each chromosome",default=TRUE);
 parser$add_argument(
 "--max_mut","-M",help="genomes skipped if their total mutation load exceeds this value",default=50000
 );
@@ -33,6 +35,7 @@ parser$add_argument(
     "--calc_background","-b",help="if you have done this once for a cohort, you can reload the result in future runs by setting this to 0",default=1);
 
 args = parser$parse_args();
+
 genome.fai = args$genome_fai
 off.by = as.integer(args$off_by);
 cpu.num=as.integer(args$cpu_num);
@@ -258,6 +261,11 @@ runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,e
   return(stored.all)
 }
 
+plotRainstorm<-function(points,name){
+    ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0)
+    ggsave(file=name,width=7,height=4)
+    }
+
   
   n = length(use.cases)
   n=n+22
@@ -293,6 +301,9 @@ for(chrom in goodchrom){
     unadj=c()
     mutdiff=c()
     for(patient in c(1:length(alldat.allpatients))){
+        n = length(unadj);
+        print(paste(patient,n));
+        print("------------");
       unadj = c(unadj,alldat.allpatients[[patient]]$mutrate.noadj)
       patients=c(patients,alldat.allpatients[[patient]]$patient)
       positions=c(positions,alldat.allpatients[[patient]]$position)
@@ -305,8 +316,8 @@ for(chrom in goodchrom){
     
     
     filen = paste("rainstorm_noncoding_k_",off.by,"_mean_",chrom,".tsv",sep="")
-    write.table(allcounted,file=filen,sep="\t",quote=F)
-   
+    write.table(allcounted,file=filen,sep="\t",quote=F);
+    plotRainstorm(allcounted,gsub(".tsv",".pdf",filen));
     #write out plots here optionally
 }
 
