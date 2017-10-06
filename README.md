@@ -7,7 +7,7 @@ This script takes a MAF file containing genome-wide mutations from many cancer g
 ## rainstorm_plot.R 
 A basic plotting script using ggplot2 to visualize chromosome-wide patterns or specific regions on chromosomes.
 
-##rainstorm_peaks.R
+## rainstorm_peaks.R
 
-##Example
-Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet --input_maf ./DLBCL_FL.maf /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv
+### Example
+```Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet --input_maf ./DLBCL_FL.maf /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv```
