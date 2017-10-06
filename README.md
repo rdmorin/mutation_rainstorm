@@ -48,6 +48,25 @@ Rscript ./rainstorm.R --m ./cohort_mutations_merged.maf --o cohort_out --genome_
 ## rainstorm_plot.R 
 A basic plotting script using ggplot2 to visualize chromosome-wide patterns or specific regions on chromosomes.
 
+```
+usage: ./rainstorm_plot.R [-h] [--rainstorm_points RAINSTORM_POINTS]
+                          [--xstart XSTART] [--xend XEND]
+
+plot a genomic region with mutations and encode data
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --rainstorm_points RAINSTORM_POINTS, -r RAINSTORM_POINTS
+                        Rainstorm output (points to plot) from a single
+                        chromosome
+  --xstart XSTART, -s XSTART
+                        limit plot to points after this position
+  --xend XEND, -e XEND  limit plot to points before this position
+```
+### Example
+```
+Rscript ./rainstorm_plot.R --rainstorm_points ./cohort_out_chr3.tsv
+```
 ## rainstorm_peaks.R
 
 ### Example
