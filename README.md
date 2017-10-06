@@ -40,6 +40,10 @@ optional arguments:
                         reload the result in future runs by setting this to 0
 
 ```
+### Example
+```
+Rscript ./rainstorm.R --m ./cohort_mutations_merged.maf --o cohort_out --genome_fai ./hg19.ucsc.fa.fai --cpu_num 12
+```
 
 ## rainstorm_plot.R 
 A basic plotting script using ggplot2 to visualize chromosome-wide patterns or specific regions on chromosomes.
