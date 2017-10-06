@@ -49,7 +49,8 @@ optional arguments:
 ```
 ### Example
 ```
-Rscript ./rainstorm.R --m ./cohort_mutations_merged.maf --o cohort_out --genome_fai ./hg19.ucsc.fa.fai --cpu_num 12
+Rscript ./rainstorm.R --input_maf ./cohort_mutations_merged.maf \
+--output_base_name outdir/cohort_out --genome_fai ./hg19.ucsc.fa.fai --cpu_num 12
 ```
 With genomes that have high mutation loads, we strongly recommend running this with as many CPU cores as possible.
 
