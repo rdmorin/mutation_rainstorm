@@ -14,36 +14,39 @@ set.seed(962384)
 parser <- ArgumentParser(description="wavelet searching argument");
 
 parser$add_argument(
-  "--input_files", "-in", 
-  help="Input path and files"
+  "input_files", 
+  help="Input path and files", nargs='+', type="character"
 );
 
 parser$add_argument(
-  "--stringSplit", "-split", 
+  "--stringSplit", 
   help="characters before chr# or # in the input file names"
 );
 
 parser$add_argument(
-  "--input_maf", "-m",
+  "--input_maf", 
   help="Input maf path and name"
 );
 
 parser$add_argument(
-  "--output_base_file", "-out", 
+  "--output_base_file",  
   help="Output path and name base"
 );
 
+parser$add_argument(
+           "-patient_minimum", help="minimum number of patients with mutations in a peak for it to be retained", default=4,type="integer");
 
 args = parser$parse_args();
 
 files=args$input_files
+
 sepchr = args$stringSplit
 outname = args$output_base_file
 maf.file = args$input_maf
-
+patient_minimum = args$patient_minimum
 ######################################################
 
-peakSearch=function(datin, noPatCut=4, snrperc=0.95){  
+peakSearch=function(datin, noPatCut=patient_minimum, snrperc=0.95){  
   newdat=-datin$mutrate
   peakInfo = peakDetectionCWT(newdat) 
   rm(newdat)

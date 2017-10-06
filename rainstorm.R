@@ -3,24 +3,29 @@
 ##### Authors: Ryan Morin and Aixiang Jiang, 2017
 ########################################
 
-library(argparse)
-require(GenomicRanges)
-require(ggplot2)
-library(maftools)
-library(data.table)
-library(parallel)
+suppressMessages(library(argparse));
+suppressMessages(library(GenomicRanges));
+suppressMessages(library(ggplot2));
+suppressMessages(library(maftools));
+suppressMessages(library(data.table));
+suppressMessages(library(parallel));
 
-
-parser <- ArgumentParser(description="plot a genomic region with mutations and encode data");
+#bad case example: ""FL1005_T1"" - need to remove these from the "use.cases" if zero mutations on any chromosome 
+parser <- ArgumentParser(description="Calculate rainstorm intermutation distance values for all mutations in a large set of cancer genomes");
 
 parser$add_argument(
-    "--input_maf", "-m",
+    "--input_maf", "--m",
     help="MAF file containing mutation calls from many patient genomes"
     );
+
+parser$add_argument(
+  "--output_base_name","--o",help="specify a base file name prefix for all outputs");
+
+
 parser$add_argument(
            "--cpu_num","-c",help="set to number of CPUs you would like to use to perform calculation in parallel (consumes lots of RAM)",default=1);
 parser$add_argument(
-    "--genome_fai", "-g",
+    "--genome_fai", "--g",
     help="provide the corresponding fasta index for the genome you used. must match the chromosome naming style used in your MAF!", default="hg19.ensembl.fa.fai"
 );
 
@@ -40,7 +45,7 @@ genome.fai = args$genome_fai
 off.by = as.integer(args$off_by);
 cpu.num=as.integer(args$cpu_num);
 calc.background = as.integer(args$calc_background);
-
+basename = args$output_base_name;
 mutcount.max = as.integer(args$max_mut);
 
 if(!is.null(genome.fai)){
@@ -48,13 +53,12 @@ if(!is.null(genome.fai)){
     print(genomedetails);
     chrlengths  = genomedetails[,2];
     names(chrlengths) = genomedetails[,1];
-
 }else{
     print("error, missing genome");
     q();
 }
-maf.file = args$input_maf
 
+maf.file = args$input_maf
 maf.full = read.maf(maf.file,useAll = T, removeSilent = F)
 
 #get IDs of cases passing the max mutation criteria
@@ -67,6 +71,27 @@ correctLocalMutrate2<-function(chrom,positions,distval,model,logged_mutrate){
   predrate =  predict(model,newdata=data.frame(starts=positions))
   adjusted = log(as.numeric(distval)) + predrate + logged_mutrate
   return(adjusted)
+}
+
+getMutDists1 <-function(pos1,pos2){
+  #merge together both lists of positions
+  if(length(pos1)==0 || length(pos2)==0){
+    return(rep("NA",length(pos1)))
+  }
+  pos2 = c(pos2,1000000000) #to ensure last p1 position always gets a diff value
+  these = c(pos1,pos2)
+  names(these) = c(rep("p1",length(pos1)),rep("p2",length(pos2)))
+  #sort on position
+  sorted = these[order(these)]
+  diffs=diff(sorted)
+  #assign naming to match the left index (instead of the right)
+  names(diffs) = names(sorted)[c(1:length(sorted)-1)]
+  #determine adjacencies in the same genome (to mask out as NA)
+  adjacents = which(names(sorted)== c(names(sorted)[c(2:length(sorted))],""))
+  diffs[adjacents]=NA;
+  #keep only the positions with names indicating they derive from a position in p1
+  pos1diffs = diffs[names(diffs)=="p1"]
+  return(pos1diffs)
 }
 
 #function used to obtain a value for each mutation that is later scaled for local mutation rate. This function just compares pairs of genomes and is called by another function when performing a one-to-all comparison
@@ -107,28 +132,45 @@ getMutDists <-function(pos1,pos2,id1='G1',getmin=FALSE){
 }
 
 #calls the getMutDists function on all cases for a single index case (id)
-getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=2,getmin=FALSE,usemean=FALSE){
+getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=3,usemean=TRUE){
   #extract mutations in region for this genome and compute the N-closest minimum distance to each variant among all genomes (default N, 2). Self is ignored, nearest genome is ignored.
   ### back to noncoding only
   thesemut = as.data.frame(maf@data[Tumor_Sample_Barcode==id & Variant_Classification %in% noncoding & Chromosome == chromosome & Start_Position > start & Start_Position < end,Start_Position])[,1]
-
-    thesemut = thesemut[order(thesemut)]
-  distmat = matrix(nrow=length(thesemut),ncol=length(use.cases)-1)
-  i=1
-  for(mycase in use.cases){
-    if(mycase == id){
-      next; 
-    }
-    thosemut = as.data.frame(maf@data[Tumor_Sample_Barcode==mycase & Chromosome == chromosome &  Start_Position > start & Start_Position < end,Start_Position])[,1]
-    thosemut = thosemut[order(thosemut)]
-    dists =  getMutDists(thesemut,thosemut,getmin=getmin) #getmin option (not used currently) would force the distance in both directions to be considered and keep min()
-    distmat[,i]=dists
-    i=i+1
+  thesemut = thesemut[order(thesemut)]
+  thisind = which(use.cases %in% id)
+  
+  alldists = lapply(use.cases[-thisind],function(x){
+      thosemut = as.data.frame(maf@data[Tumor_Sample_Barcode==x &
+                                          Chromosome == chromosome &  
+                                          Start_Position > start & 
+                                          Start_Position < end,
+                                        Start_Position])[,1];
+        thosemut=thosemut[order(thosemut)]
+        getMutDists1(thesemut,thosemut)}
+        )
+ 
+  #before removing any cases where every value is NA, 
+  #the indexes in alldists correspond to the mutation positions in thesemut
+  #need to mark all-NA positions for removal and removal of corresponding position in thesemut
+  #this command removes any patient that contribued only NAs to the matrix
+  #allna = which(unlist(lapply(alldists,function(x){class(x)=="character"})))
+  #if(length(allna)>0){
+  #  alldists = alldists[-allna]
+  #}
+  distmat = do.call("rbind",alldists)
+  
+  allna = which(apply(distmat,2,function(x){
+    length(which(!is.na(x) ))<2}))
+  if(length(allna)>0){
+    distmat = distmat[,-allna]
+    thesemut = thesemut[-allna]
   }
+  distsort = apply(distmat,2,sort) #list of lists due to NAs
+  #print(table(unlist(lapply(distsort,length))==0))
   if(usemean){
-    keepdist = apply(distmat,1,function(x){mean(x[order(x)][c(1:offby)])})
+    keepdist = unlist( lapply(distsort,function(x){mean(x[order(x)][c(1:offby)])}))
   }else{
-      keepdist = apply(distmat,1,function(x){x[order(x)][offby]})
+      keepdist = unlist(lapply(distsort,function(x){x[order(x)][offby]}))
       #original approach is to just return the kth value instead of mean from 1:k
   }
   return(data.frame(position=thesemut,mindist = keepdist,stringsAsFactors = F))
@@ -202,18 +244,18 @@ print("done calculating background correction")
 #load this next file in as a data frame to skip the steps leading up to this line
 alldf = data.frame(chrom=bincounts.chrom,starts=binstarts.all,ends=binstops.all,counts=bincounts.all)
 
-write.table(alldf,file="./background_100k_binned_noncodingsnv_density.tsv",sep="\t",quote=F)
-model= loess(counts~starts,data=alldf[alldf[,1]== 3 & alldf[,"counts"]!=-Inf,],span=0.005,surface='direct')
+write.table(alldf,file=paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",quote=F)
+model= loess(counts~starts,data=alldf[alldf[,1]== 3 & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
 chrdf =alldf[alldf[,1]==3,]
 lopoints=predict(model,newdata=chrdf)
 
 chrdf$predicted=lopoints
 ggplot(chrdf,aes(x=starts,y=counts)) + geom_point(alpha=0.4,colour='orange') + geom_line(aes(x=starts,y=predicted),colour='red') + ylim(-18,-23); #pllot out chrom3
-ggsave(file="chr3_background.pdf",width=7,height=4)
+ggsave(file=paste(basename,"_chr3_background.pdf",sep=""),width=7,height=4)
 
 }else{
-alldf = read.csv("./background_100k_binned_noncodingsnv_density.tsv",sep="\t",stringsAsFactors=F);
-    }
+  alldf = read.csv(paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",stringsAsFactors=F);
+}
 
 ######### end of binned data part, which should not be re-run for the same disease data type ######################
 #####################################################################################################################
@@ -221,10 +263,13 @@ alldf = read.csv("./background_100k_binned_noncodingsnv_density.tsv",sep="\t",st
 
 ##### move functions here, before calling them
 
-runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,end,offby=3,getmin=FALSE){
+runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,end,offby=3){
+  starttime = Sys.time();
   stored.all = list()
   use.mean=TRUE
-  these = getMinDistByGenome(maf.full,case,chrom,use.cases,start,end,offby=offby,getmin=getmin,usemean=use.mean)
+ 
+  these = getMinDistByGenome(maf.full,case,chrom,use.cases,start,end,offby=offby,usemean=use.mean)
+  
   if(dim(these)[1]==0){
     print(paste("skip due to lack of mutations on chromosome",case)) 
     
@@ -239,7 +284,6 @@ runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,e
       return(stored.all)
     }
   }
-  
   tot = length(these[,1])
   genometot = maf.full@variants.per.sample[Tumor_Sample_Barcode==case,Variants]
   ltot = log(genometot/280000000)
@@ -251,28 +295,30 @@ runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,e
   scaled = log(as.numeric(these.keep[,"mindist"])+1) + log(genometot)-log(280000000) #add one to get rid of the annoying -Inf issue. These are definitely things that need to be retained.
   scaled = scaled - median(scaled)
   localadj = correctLocalMutrate2(chrom,these.keep[,1],as.numeric(these.keep[,"mindist"])+1,background.model,ltot)
-  
   scaled.localadj=localadj - median(localadj,na.rm=T)
   stored.all[["mutdiff"]]=as.numeric(these.keep[,"mindist"])
   stored.all[["position"]]=these.keep[,1]
   stored.all[["mutrate"]]=scaled.localadj
   stored.all[["mutrate.noadj"]]=scaled
   stored.all[["patient"]]=rep(case,length(these.keep[,1]))
+  donetime = Sys.time();
+  overall = donetime - starttime;
+  print(paste(case,"Took",overall,"seconds"));
   return(stored.all)
 }
 
 plotRainstorm<-function(points,name){
-    ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0)
+    ggplot(points,aes(x=position,y=mutrate,colour=patient),size=1) + geom_point(alpha=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0)
     ggsave(file=name,width=7,height=4)
     }
 
   
-  n = length(use.cases)
-  n=n+22
-  cols=colors()[c(23:n)]
-  names(cols) = use.cases
+n = length(use.cases)
+n=n+22
+cols=colors()[c(23:n)]
+names(cols) = use.cases
 
-  nathresh = 0.3 #20% NA values. Need to make this a parameter that users can modify
+nathresh = 0.3 #20% NA values. Need to make this a parameter that users can modify
   
   
   
@@ -283,16 +329,33 @@ for(chrom in goodchrom){
     #chrom = paste("chr",chrom,sep="")
     model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.005,surface='direct')
     if(cpu.num > 1){
-    alldat.allpatients = mclapply(use.cases,
+      alldat.allpatients = mclapply(use.cases,
       function(x){
-      runByCaseSmooth(x,maf.full,model,use.cases,chrom,start,end,offby=off.by)
+      runByCaseSmooth(x,maf.full,model,use.cases,
+                      chrom,start,end,offby=off.by)
       },
-                                        mc.cores = cpu.num) ### mc.cores is to set number of parallel jobs: ie. CPUs
-        }else{
-    alldat.allpatients = list();
-    for(thiscase in use.cases){
-        alldat.allpatients[[thiscase]]=runByCaseSmooth(thiscase,maf.full,model,use.cases,chrom,start,end,offby=off.by)
-    }
+      mc.cores = cpu.num) ### mc.cores is to set number of parallel jobs: ie. CPUs
+    }else{
+      case.times=list();
+      alldat.allpatients = list();
+      lu = length(use.cases);
+      j =1;
+      for(thiscase in use.cases[c(51:100)]){
+        #start_time <- Sys.time()
+        
+        #alldat.allpatients[[thiscase]]=runByCaseSmooth(thiscase,maf.full,model,use.cases,chrom,start,end,offby=off.by,oldway=TRUE)
+        alldat.allpatients[[thiscase]]=
+          runByCaseSmooth(thiscase,maf.full,model,use.cases,
+                          chrom,start,end,offby=off.by)
+        
+        end_time <- Sys.time()
+        duration = end_time - start_time;
+        #print(paste("time for",thiscase,"was",duration, "done",j,"of",lu))
+        j = j+1;
+        case.times[[thiscase]] = duration
+      }
+      meantime = mean(unlist(case.times));
+      print(paste("average time per query genome comparison:",meantime))
     }
     #convert to lists with like elements combined and grouped by patient
     patients = c()
@@ -313,9 +376,7 @@ for(chrom in goodchrom){
     #ready points for ggplot rendering
     allcounted = data.frame(mutrate=mutrate,unadj=unadj,position=positions,patient=patients,mutdiff=mutdiff)
 
-    
-    
-    filen = paste("rainstorm_noncoding_k_",off.by,"_mean_",chrom,".tsv",sep="")
+    filen = paste(basename,"_rainstorm_k_",off.by,"_mean_",chrom,".tsv",sep="")
     write.table(allcounted,file=filen,sep="\t",quote=F);
     plotRainstorm(allcounted,gsub(".tsv",".pdf",filen));
     #write out plots here optionally
