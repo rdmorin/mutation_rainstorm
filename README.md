@@ -68,6 +68,30 @@ optional arguments:
 Rscript ./rainstorm_plot.R --rainstorm_points ./cohort_out_chr3.tsv
 ```
 ## rainstorm_peaks.R
+Use the wavelet approach to identify regions enriched for mutations across multiple patients ("peaks").
+
+```
+usage: ./rainstorm_peaks.R [-h] [--stringSplit STRINGSPLIT]
+                           [--input_maf INPUT_MAF]
+                           [--output_base_file OUTPUT_BASE_FILE]
+                           input_files [input_files ...]
+
+wavelet searching argument
+
+positional arguments:
+  input_files           Input path and files
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --stringSplit STRINGSPLIT
+                        characters before chr# or # in the input file names
+  --input_maf INPUT_MAF
+                        Input maf path and name
+  --output_base_file OUTPUT_BASE_FILE
+                        Output path and name base
+```
 
 ### Example
-```Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet --input_maf ./DLBCL_FL.maf /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv```
+```
+Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet --input_maf ./DLBCL_FL.maf /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv
+```
