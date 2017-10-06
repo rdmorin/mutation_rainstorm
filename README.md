@@ -1,12 +1,15 @@
-# mutation_rainstorm
-We implemented a multi-patient variant of the rainfall plot we have named a rainstorm plot. There is a fairly complicated set of pre-processing steps to help mitigate a variety of issues that are encountered when trying to plot more than one patient rainfall plot on one image. Our calculation also adjusts for local variation in mutation rate that can be observed at the level of the entire cohort.
+# Mutation Rainstorm Analysis
+We have implemented a multi-patient extension of the rainfall plot concept that we named a rainstorm plot. There is a fairly complicated set of pre-processing steps to help mitigate a variety of issues that are encountered when trying to plot more than one patient rainfall plot on one image. Our calculation also adjusts for local variation in mutation rate that can be observed at the level of the entire cohort. The preprocessing is all accomplished by ```rainstorm.R``` and ```rainstorm_peaks.R``` can be used, if desired, to search for peaks of mutations within the data. 
 
 ## Dependencies
 The following R packages are needed by these tools:
 ```argparse```, ```GenomicRanges```, ```ggplot2```, ```maftools```, ```MassSpecWavelet```, ```parallel```
 
 ## rainstorm.R 
-This script takes a MAF file containing genome-wide mutations from many cancer genomes and determines the background mutation rate using the whole cohort. Then, one chromosome at a time, a patient-by-patient calculation similar to the rainfall plot calculation is used to infer the distance between each mutation and mutations in other genomes in the same cohort. 
+This script takes a MAF file containing genome-wide mutations from many cancer genomes and determines the background mutation rate using the whole cohort. Then, one chromosome at a time, a patient-by-patient calculation similar to the rainfall plot calculation is used to infer the distance between each mutation and mutations in other genomes in the same cohort. The first time a data set is analyzed, the script will calculate the local background mutation rate for each chromosome using, by default, 100 kb windows. An example of the local mutation rate across chromosome 3 is plotted by default. For a non-Hodgkin lymphoma cohort, the result looks like this:
+
+
+
 
 ```
 usage: ./rainstorm.R [-h] [--input_maf INPUT_MAF]
