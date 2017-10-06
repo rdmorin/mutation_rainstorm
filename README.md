@@ -4,7 +4,8 @@ We implemented a multi-patient variant of the rainfall plot we have named a rain
 ## rainstorm.R 
 This script takes a MAF file containing genome-wide mutations from many cancer genomes and determines the background mutation rate using the whole cohort. Then, one chromosome at a time, a patient-by-patient calculation similar to the rainfall plot calculation is used to infer the distance between each mutation and mutations in other genomes in the same cohort. 
 
-```usage: ./rainstorm.R [-h] [--input_maf INPUT_MAF]
+```
+usage: ./rainstorm.R [-h] [--input_maf INPUT_MAF]
                      [--output_base_name OUTPUT_BASE_NAME] [--cpu_num CPU_NUM]
                      [--genome_fai GENOME_FAI] [--plot PLOT]
                      [--max_mut MAX_MUT] [--off_by OFF_BY]
@@ -37,7 +38,8 @@ optional arguments:
   --calc_background CALC_BACKGROUND, -b CALC_BACKGROUND
                         if you have done this once for a cohort, you can
                         reload the result in future runs by setting this to 0
-                        ```
+
+```
 
 ## rainstorm_plot.R 
 A basic plotting script using ggplot2 to visualize chromosome-wide patterns or specific regions on chromosomes.
