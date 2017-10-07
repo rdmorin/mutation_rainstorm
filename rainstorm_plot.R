@@ -12,10 +12,6 @@ library(data.table)
 
 parser <- ArgumentParser(description="plot a genomic region with mutations and encode data");
 
-parser$add_argument(
-    "--rainstorm_chr", "-rc",
-    help="Rainstorm output (points to plot) from a single chromosome",default="fl_dlbcl_wavelet_min8waveletPatientDetail.tsv"
-    );
 
 parser$add_argument(
     "--file_base_name","-bn",
@@ -86,18 +82,23 @@ load_raw_points <-  function(files=NULL,separator=NULL){
     points.all = do.call("rbind",points.list);
 }
 
-plot_single_chrom <- function(style="linear",chrom=NULL){
+plot_single_chrom <- function(style="linear",chrom=NULL,base=NULL){
     if(style == "circular"){
-        ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom <- point(alpha=0.2,size=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0) + coord_polar(theta ="x");
+        ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.2,size=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0) + coord_polar(theta ="x");
+     ggsave(file=paste(base,chrom,style,"_single",".png",sep=""),width=9,height=9)
+        ggsave(file=paste(base,chrom,style,"_single",".pdf",sep=""),width=9,height=9)
+        
     } else{
+        
         if(is.na(xmin) && is.na(xmax)){
             ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.2,size=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0) 
         }else{
             ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.2,size=0.2) + theme_classic() + theme(legend.position="none") + ylim(NA,0) + xlim(xmin,xmax)
         }
+        ggsave(file=paste(base,chrom,style,"_single",".png",sep=""),width=16,height=3)
+        ggsave(file=paste(base,chrom,style,"_single",".pdf",sep=""),width=16,height=3)
     }
     
-    ggsave(file=paste(infile,".pdf",sep=""),width=16,height=3)
 
 }
 
@@ -109,7 +110,7 @@ plot_all_chrom <-function(style="linear",basename=separator){
     }else{
         ggplot(points) + geom_point(aes(colour=patient,x=position,y=mutrate),alpha=0.1,size=0.1) + facet_wrap(~chromosome,scale="free_x",ncol=2) +
             theme_classic() + theme(legend.position = 'none') + ylim(NA,0)
-            
+        print(paste("saving as",basename,"allchr_linear.pdf"))
         ggsave(file=paste(basename,"allchr_linear.pdf",sep=""),width=14,height=22)
         ggsave(file=paste(basename,"allchr_linear.png",sep=""),width=14,height=22)
     }
@@ -121,9 +122,9 @@ if(length(allfiles)>0){
 }else{
     points=read.csv(infile,sep="\t",stringsAsFactors=F);
     }
-
+print(paste("chrom:",chromname))
 if(chromname == "all"){
     plot_all_chrom(plotstyle);
 }else{
-    plot_single_chrom(plotstyle,chrom=chromname);
+    plot_single_chrom(plotstyle,chrom=chromname,separator);
 }
