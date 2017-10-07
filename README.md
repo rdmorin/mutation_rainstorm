@@ -78,7 +78,7 @@ Rscript ./rainstorm_plot.R --rainstorm_points ./cohort_out_chr3.tsv
 ```
 The default plot will be a linear representation of the chromosome with coordinates on the X axis and the rainstorm value on the Y. The lower values indicate an enrichment of mutations. Each color represents a different patient in the cohort. As such, a diversity of colors in one region suggests a mutation peak that is more prevalent in the cohort. 
 
-[Linear rainstorm plot for chromosome 1 from a cohort of lymphoma genomes](images/FL_DLBCL_rainstorm_k_4_mean_1linear_single.png)
+![Linear rainstorm plot for chromosome 1 from a cohort of lymphoma genomes](images/FL_DLBCL_rainstorm_k_4_mean_1linear_single.png)
 ## rainstorm_peaks.R
 Use the wavelet approach to identify regions enriched for mutations across multiple patients ("peaks").
 
