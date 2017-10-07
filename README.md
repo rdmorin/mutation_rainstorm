@@ -1,5 +1,5 @@
 # Mutation Rainstorm Analysis
-### Please be aware that this repository is under active development
+### _Please be aware that this repository is under active development_
 
 We have implemented a multi-patient extension of the rainfall plot concept that we named a rainstorm plot. There is a fairly complicated set of pre-processing steps to help mitigate a variety of issues that are encountered when trying to plot more than one patient rainfall plot on one image. Our calculation also adjusts for local variation in mutation rate that can be observed at the level of the entire cohort. The preprocessing is all accomplished by ```rainstorm.R``` and ```rainstorm_peaks.R``` can be used, if desired, to search for peaks of mutations within the data. 
 
