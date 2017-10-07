@@ -82,8 +82,8 @@ The default plot will be a linear representation of the chromosome with coordina
 
 Another option to generate a more horizontally compact representation is a circular plot using polar coordinates to represent the chromosomal positions.
 
-<a href="url"><img src="images/FL_DLBCL_rainstorm_k_4_mean_1circular_single.png" align="left" height="248" width="248" ></a>
-<br/><br/>
+![Circular rainstorm plot for chromosome 1 (same data as above)](images/FL_DLBCL_rainstorm_k_4_mean_1circular_single.png)
+
 
 ## rainstorm_peaks.R
 Use the wavelet approach to identify regions enriched for mutations across multiple patients ("peaks").
