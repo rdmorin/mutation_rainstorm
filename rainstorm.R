@@ -327,7 +327,7 @@ for(chrom in goodchrom){
     start=1
     end = max(maf.full@data[ Chromosome == chrom,Start_Position])
     #chrom = paste("chr",chrom,sep="")
-    model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.005,surface='direct')
+    model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
     if(cpu.num > 1){
       alldat.allpatients = mclapply(use.cases,
       function(x){

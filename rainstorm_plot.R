@@ -104,9 +104,9 @@ plot_single_chrom <- function(style="linear",chrom=NULL,base=NULL){
 
 plot_all_chrom <-function(style="linear",basename=separator){
     if(style == "circular"){
-        ggplot(points,aes(x=position,y=mutrate,colour=patient)) + geom_point(alpha=0.1,size=0.1) + theme_classic() + theme(legend.position="none") + ylim(NA,0) +
+        ggplot(points,aes(x=relative_pos,y=mutrate,colour=patient)) + geom_point(alpha=0.1,size=0.1) + theme_classic() + theme(legend.position="none") + ylim(NA,0) +
         coord_polar(theta="x") + facet_wrap(~chromosome,ncol=5); #plot in a 5x5 grid 
-        ggsave(file=paste(infile,".pdf",sep=""),width=18,height=18)
+        ggsave(file=paste(basename,"_",style,"_all_chr.pdf",sep=""),width=18,height=18)
     }else{
         ggplot(points) + geom_point(aes(colour=patient,x=position,y=mutrate),alpha=0.1,size=0.1) + facet_wrap(~chromosome,scale="free_x",ncol=2) +
             theme_classic() + theme(legend.position = 'none') + ylim(NA,0)
