@@ -118,8 +118,8 @@ Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet \
  /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv
 ```
 ### External links
-. [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
+..* [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
 
-. [BC Cancer Agency's Genome Sciences Centre](http://bcgsc.ca/)
+..* [BC Cancer Agency's Genome Sciences Centre](http://bcgsc.ca/)
 
-. [Cancer Genomics in Galaxy](https://github.com/morinlab/tools-morinlab)
+..* [Cancer Genomics in Galaxy](https://github.com/morinlab/tools-morinlab)
