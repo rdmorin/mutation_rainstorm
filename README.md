@@ -121,3 +121,5 @@ Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet \
 . [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
 
 . [BC Cancer Agency's Genome Sciences Centre](http://bcgsc.ca/)
+
+. [Cancer Genomics in Galaxy](https://github.com/morinlab/tools-morinlab)
