@@ -113,9 +113,9 @@ optional arguments:
 
 ### Example
 ```
-Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base fl_dlbcl_wavelet \
- --input_maf ./DLBCL_FL.maf \
- /home/rmorin/git/mutation_rainstorm/fl_dlbcl/FL_DLBCL_*mean*tsv
+Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base ./output/mean_ \
+ --input_maf ./cohort_mutations_merged.maf \
+ ./cohort_out_*tsv 
 ```
 ### External links
  * [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
