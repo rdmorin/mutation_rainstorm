@@ -19,6 +19,12 @@ parser$add_argument(
     );
 
 parser$add_argument(
+  "--nonCoding", "--nc",
+  help="limit to nonCoding range only? 1 for Yes or 0 for No", default=0
+);
+
+
+parser$add_argument(
   "--output_base_name","--o",help="specify a base file name prefix for all outputs");
 
 
@@ -47,6 +53,7 @@ cpu.num=as.integer(args$cpu_num);
 calc.background = as.integer(args$calc_background);
 basename = args$output_base_name;
 mutcount.max = as.integer(args$max_mut);
+nonCodingFlag = as.integer(args$nonCoding);
 
 if(!is.null(genome.fai)){
     genomedetails = read.table(genome.fai,sep="\t")
@@ -131,6 +138,17 @@ getMutDists <-function(pos1,pos2,id1='G1',getmin=FALSE){
   
 }
 
+####################################
+##### have choices for both full and nonCoding range
+noncoding = as.character(colnames(maf.full@variant.classification.summary)) 
+tmp1=grep("total",noncoding)
+tmp2=grep("ample",noncoding)
+noncoding = noncoding[-c(tmp1,tmp2)]
+
+if(nonCodingFlag == 1){
+       noncoding = c("3'Flank","IGR","Intron","3'UTR","5'Flank","5'UTR","Targeted_Region","RNA")
+}
+
 #calls the getMutDists function on all cases for a single index case (id)
 getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=3,usemean=TRUE){
   #extract mutations in region for this genome and compute the N-closest minimum distance to each variant among all genomes (default N, 2). Self is ignored, nearest genome is ignored.
@@ -176,7 +194,7 @@ getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=3,useme
   return(data.frame(position=thesemut,mindist = keepdist,stringsAsFactors = F))
 }
  
-noncoding = c("3'Flank","IGR","Intron","3'UTR","5'Flank","5'UTR","Targeted_Region","RNA")
+
 
 
 
