@@ -263,13 +263,7 @@ print("done calculating background correction")
 alldf = data.frame(chrom=bincounts.chrom,starts=binstarts.all,ends=binstops.all,counts=bincounts.all)
 
 write.table(alldf,file=paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",quote=F)
-model= loess(counts~starts,data=alldf[alldf[,1]== 3 & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
-chrdf =alldf[alldf[,1]==3,]
-lopoints=predict(model,newdata=chrdf)
 
-chrdf$predicted=lopoints
-ggplot(chrdf,aes(x=starts,y=counts)) + geom_point(alpha=0.4,colour='orange') + geom_line(aes(x=starts,y=predicted),colour='red') + ylim(-18,-23); #pllot out chrom3
-ggsave(file=paste(basename,"_chr3_background.pdf",sep=""),width=7,height=4)
 
 }else{
   alldf = read.csv(paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",stringsAsFactors=F);
