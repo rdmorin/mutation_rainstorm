@@ -1,4 +1,5 @@
-# Mutation Rainstorm Analysis
+# Rainstorm and D:droplet:ppler 
+## A toolkit to identify regions of the genome enriched for mutations from large sets of cancer genomes
 ### _Please be aware that this repository is under active development_
 
 We have implemented a multi-patient extension of the rainfall plot concept that we named a rainstorm plot. There is a fairly complicated set of pre-processing steps to help mitigate a variety of issues that are encountered when trying to plot more than one patient rainfall plot on one image. Our calculation also adjusts for local variation in mutation rate that can be observed at the level of the entire cohort. The preprocessing is all accomplished by ```rainstorm.R``` and ```rainstorm_peaks.R``` can be used, if desired, to search for peaks of mutations within the data. 
@@ -88,7 +89,7 @@ Another option to generate a more horizontally compact representation is a circu
 
 
 ## rainstorm_peaks.R
-Use the wavelet approach to identify regions enriched for mutations across multiple patients ("peaks").
+Use the Doppler algorithm to identify regions enriched for mutations across multiple patients (Doppler "peaks").
 
 ```
 usage: ./rainstorm_peaks.R [-h] [--stringSplit STRINGSPLIT]
