@@ -118,6 +118,15 @@ Rscript ./rainstorm_peaks.R --stringSplit mean_ --output_base ./output/mean_ \
  --input_maf ./cohort_mutations_merged.maf \
  ./cohort_out_*tsv 
 ```
+### More visualization options
+There are a variety of useful ways to summarize and visualize the Rainstorm output. The R code below uses the output of Doppler (mutations within peaks) and the Rainstorm output to cycle through an animation of the local mutation density in each patient. 
+
+```
+library(gganimate)
+mutmaf=read.csv("doppler_mutations_patient_detail.tsv",sep="\t",header=1)
+ggplot(mutmaf,aes(x=position,y=mutrate,color=patient)) + geom_point(alpha=0.4,size=0.3,show.legend = FALSE) + ylim(-8,0) + theme_classic() + facet_wrap(~chromosome,scales='free_x') + labs(y="Mutation Density") + transition_time(patient.numeric) + ease_aes("linear")
+```
+
 ### External links
  * [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
 
