@@ -126,8 +126,7 @@ library(gganimate)
 mutmaf=read.csv("doppler_mutations_patient_detail.tsv",sep="\t",header=1)
 ggplot(mutmaf,aes(x=position,y=mutrate,color=patient)) + geom_point(alpha=0.4,size=0.3,show.legend = FALSE) + ylim(-8,0) + theme_classic() + facet_wrap(~chromosome,scales='free_x') + labs(y="Mutation Density") + transition_time(patient.numeric) + ease_aes("linear")
 ```
-![Animation of mutation density across a cohort of DLBCLs]
-(images/DLBCL_chrall_web.gif)
+![Animation of mutation density across a cohort of DLBCLs](images/DLBCL_chrall_web.gif)
 ### External links
  * [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
 
