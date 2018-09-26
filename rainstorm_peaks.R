@@ -1,52 +1,177 @@
-###########################################
-#### R code for peak searching with wavelet
-#### Aixiang Jiang, Sep 28, 2017
+#######################################################################################
+#### R code for peak searching with wavelet, and post processing to modify wavelet peaks
+#### Aixiang Jiang, June 2018
+########################################################################################
 
-library(argparse)
-library(MassSpecWavelet)
-library(maftools)
-library(data.table)
-#library(parallel)
 
-set.seed(962384) 
-#### random seed for peak detection
+########################### example, Aug 10, 2018 #############################
+# Rscript /mnt/thanos_lv/ajiang/AJ2018/RcodeAJ2018/rainWaveTestCodes/waveletPlusPostProcessAug2018.R --output_base_file  /mnt/thanos_lv/ajiang/testwave_FL1 --rainstorm_files  /home/rmorin/rainstorm/FL_smallerbin_rainstorm_k_4_mean_3.tsv --post_process_flag 1 --stringSplit k_4_mean_ --input_maf  /home/rmorin/rainstorm/FL_some_merged.maf
+## should change output path if somebody else is used due to folder permission
 
-parser <- ArgumentParser(description="wavelet searching argument");
+## check the maf file chr format: /home/rmorin/rainstorm/FL_some_merged.maf
+# maf.file = "/home/rmorin/rainstorm/FL_some_merged.maf"
+# library(data.table)
+# maf.full = fread(maf.file, verbose = FALSE, key = c("Chromosome", "Start_Position", "End_Position"))
+# maf.full$Chromosome[1:10]
+# > maf.full$Chromosome[1:10]
+# [1] "1" "1" "1" "1" "1" "1" "1" "1" "1" "1"
+### therefore, have to change the filtering code part for this issue, since bedr needs chr
+########################################################
+
+#### there are 11 parameters, and 3 of them do not have default values
+
+#### testing code outside of R in June 2018 
+#### under: /mnt/thanos_lv/ajiang/AJ2018/testCombinedWaves
+#### Rscript R_wavelet_postProcess_June20CleanVersion.R --rainstorm_files *.tsv --output_base_file testJune20/testJune20 --input_maf /morinlab/projects/NCI_Burkitts/results/tidy/2-paediatric_cohort/strelka.pass.tidy.maf 
+
+suppressMessages(library(argparse))
+suppressMessages(library(MassSpecWavelet))
+suppressMessages(library(maftools))
+suppressMessages(library(data.table))
+suppressMessages(library(parallel))
+suppressMessages(library(bedr))
+
+########################################################
+parser <- ArgumentParser(description="wavelet searching and filtering argument");
 
 parser$add_argument(
-  "input_files", 
-  help="Input path and files", nargs='+', type="character"
+  "--rainstorm_files", "-in",  nargs="+",
+  help="Rainstorm path and files"  ### this is changed accordingly as well
 );
 
 parser$add_argument(
-  "--stringSplit", 
-  help="characters before chr# or # in the input file names"
+  "--stringSplit", "-split", 
+  help="characters before chr# or # in the input file names", default = "_k_4_"
 );
 
 parser$add_argument(
-  "--input_maf", 
+  "--input_maf", "-m",
   help="Input maf path and name"
 );
 
 parser$add_argument(
-  "--output_base_file",  
+  "--output_base_file", "-out", 
   help="Output path and name base"
 );
 
 parser$add_argument(
-           "-patient_minimum", help="minimum number of patients with mutations in a peak for it to be retained", default=4,type="integer");
+  "--extend_range_1side", "-extend", 
+  help="peak extension range for 1 side", default = 10000
+);
+
+parser$add_argument(
+   "--mut_rate_Per_kb", "-mut_cut", 
+   help="mutations per kb threshold", default = 5
+);
+
+parser$add_argument(
+  "--post_process_flag", "-post", 
+  help="Default_1_do__input_0_not_do", default=1
+);
+
+parser$add_argument(
+  "--distanceToMerge", "-dist", 
+  help="maximum distance between regions to be merged", default = 500
+);
+
+parser$add_argument(
+  "--min_peak_width", "-minWidth", 
+  help="min original width", default = 10
+);
+
+parser$add_argument(
+  "--max_peak_width", "-maxWidth", 
+  help="max final peak width", default = 20000
+);
+
+parser$add_argument(
+  "--patientInRatio", "-petient%", 
+  help="min percentage of patients per peak", default = 5 ### actually 5%, need to convert later
+);
+
+######################################
 
 args = parser$parse_args();
 
-files=args$input_files
-
+files=args$rainstorm_files
 sepchr = args$stringSplit
 outname = args$output_base_file
 maf.file = args$input_maf
-patient_minimum = args$patient_minimum
-######################################################
+peakExt1side = as.integer(args$extend_range_1side)
+mutRateCut = as.integer(args$mut_rate_Per_kb)
+distcut = as.integer(args$distanceToMerge)
+postflag = as.integer(args$post_process_flag)
+minPeakWidth = as.integer(args$min_peak_width)
+maxPeakWidth = as.integer(args$max_peak_width)
+noPatCut = as.integer(args$patientInRatio) ### this is in percentage, need to convert later
 
-peakSearch=function(datin, noPatCut=patient_minimum, snrperc=0.95){  
+###############################################################################
+
+#################################################
+### get maf file first
+maf.full = fread(maf.file, verbose = FALSE, key = c("Chromosome", "Start_Position", "End_Position"))
+#### notice that the output is data table, not maf object
+####################################################################
+
+set.seed(846161) 
+###########################################
+
+#########################################################################
+############ functions ################################
+
+getSubMaf = function(awave,mafFileIn){
+  names(awave) = c("chromosome", "leftPosition",  "rightPosition")
+  awave = data.frame(t(awave), stringsAsFactors = F)
+  awave$leftPosition = as.integer(awave$leftPosition)
+  awave$rightPosition = as.integer(awave$rightPosition)
+  awave = data.table(awave, key =  c("chromosome", "leftPosition",  "rightPosition"))
+  
+  ### add one line here on July 20
+  mafFileIn = data.table(mafFileIn, key = c("Chromosome", "Start_Position", "End_Position"))
+  
+  subm = foverlaps(x=mafFileIn, y=awave, by.x=c("Chromosome", "Start_Position", "End_Position"), by.y = c("chromosome", "leftPosition",  "rightPosition"))
+  subm = subm[!is.na(subm$leftPosition),]
+  
+  return(subm)
+}
+
+
+getMutPerKb = function(arange, submaf){
+  mafsum=subset(submaf, submaf$Start_Position >= as.integer(arange[1]) & submaf$End_Position <= as.integer(arange[2]))
+  tn=dim(mafsum)[1]
+  mutkb=1000 * tn / ( as.integer(arange[2]) -  as.integer(arange[1])  + 1)
+  return(mutkb)
+}
+
+getMafSum=function(arange,submaf){  
+  ### arange has three items: chr, start and end positions
+  mafsum=subset(submaf, submaf$Start_Position >= as.integer(arange[1]) & submaf$End_Position <= as.integer(arange[2]))
+  
+  tn=dim(mafsum)[1]
+  mutkb=1000 * tn / ( as.integer(arange[2]) -  as.integer(arange[1])  + 1)
+  vc=mafsum$Variant_Classification
+  vc=table(vc)
+  vc=names(which.max(vc))
+  
+  syms=mafsum$Hugo_Symbo
+  syms = syms[which(syms != "Unknown" & syms != "")]
+  
+  syms=table(syms)
+  syms=names(which.max(syms))
+  
+  if(length(syms)==0){syms= "Unknown"}
+  
+  pts = mafsum$Tumor_Sample_Barcode
+  pts = length(unique(pts))
+  
+  outs = list(c(mutkb,pts),c(vc,syms),mafsum)
+  return(outs)
+  
+}
+
+peakSearch=function(datin, snrperc=0.95, hKmExt =10000, countPerKbcut = 5, chrIn="chr1", mafIn){
+  
+  ### need chr info as well to map to maf file, and of course, need maf data
   newdat=-datin$mutrate
   peakInfo = peakDetectionCWT(newdat) 
   rm(newdat)
@@ -56,7 +181,6 @@ peakSearch=function(datin, noPatCut=patient_minimum, snrperc=0.95){
   res=cbind(majorPeakInfo$peakSNR,majorPeakInfo$allPeakIndex)
   res=res[which(res[,1]>=0),]
   
-  #### then, only keep the peaks with 95 percentile of SNR
   snrCut=quantile(res[,1], snrperc)
   res=res[which(res[,1]>=snrCut),]
   
@@ -75,64 +199,107 @@ peakSearch=function(datin, noPatCut=patient_minimum, snrperc=0.95){
   
   ridgeBounds=data.frame(cbind(ridgeBounds,res[,1]))
   
-  #### calculate median + 25% of mutrate for an entire chr as cutoff
-  m25=median(datin$mutrate)+quantile(datin$mutrate, 0.25)
+  submafIn = subset(mafIn, mafIn$Chromosome == chrIn) 
+  submafIn = submafIn[order(submafIn$Start_Position),]  
   
   out=apply(ridgeBounds,1,FUN=function(x){
-    resout=rep(0, 6)
-    tm=NA
+    resout=NA
+    mm=NA
+    lm1 = max(c(datin$position[x[1]]-hKmExt, min(datin$position)))
+    lm2 = datin$position[x[2]]
+    rm1 = datin$position[x[1]]
+    rm2 = min(c(datin$position[x[2]]+hKmExt, max(datin$position)))
     
-    m1=max(c((x[1]-12),1))
-    m2=min(c((x[2]+12),dim(datin)[1]))
+    allsub = getSubMaf(c(chrIn,lm1, rm2 ), mafFileIn = submafIn) 
+    omutpkb = getMutPerKb(c(datin$position[x[1]],datin$position[x[2]]),allsub)
     
-    mm=datin[m1:m2,] 
-    mintmp=which.min(mm$mutrate)
-    ntmp=dim(mm)[1]
- 
-    tmp1=which(mm$mutrate[1:mintmp]>=m25)
-    tmp2=which(mm$mutrate[mintmp:ntmp]>=m25)
-    
-    rs1=NA
-    rs2=NA
-   
-    if(length(tmp1)>0){
-      rs1=max(tmp1)+1
-    }else{
-      rs1=1
-    }
-    if(length(tmp2)>0){
-      rs2=min(tmp2)-1+mintmp-1
-    }else{
-      rs2=ntmp
-    }
-    
-    
-    if(!is.na(rs1) & !is.na(rs2) & (rs2-rs1+1) >= 4){
-      tm=mm[rs1:rs2,]
-      tm$SNR=rep(x[3],rs2-rs1+1)
+    if(omutpkb >= countPerKbcut){
       
-      peakpos=mm$position[mintmp]
-      peakmin=mm$mutrate[mintmp]
+      ### left side
+      l1 = sort(unique(subset(allsub$Start_Position, allsub$Start_Position <= rm1)))
+      n1=length(l1)
+      l2 = rep(lm2,n1)
+      left0 = apply(cbind(l1,l2),1,getMutPerKb, submaf=allsub)
       
-      leftpos=min(tm$position)
-      rightpos=max(tm$position)
+      ### right side
+      r2 = sort(unique(subset(allsub$End_Position, allsub$End_Position >= lm2)))
+      n2 = length(r2)
+      r1 = rep(rm1,n2)
+      right0 = apply(cbind(r1,r2),1,getMutPerKb, submaf=allsub)
       
-      numberP=length(unique(tm$patient))
+      m1=l1
       
-      if(numberP >= noPatCut){
-        resout=c(peakpos,peakmin,leftpos,rightpos,numberP,tm$SNR[1])
-        pn=dim(tm)[1]
-        tm=cbind(rep(peakpos,pn),rep(leftpos,pn),rep(rightpos,pn),tm)
+      if(length(l1)>1){
+        lside = diff(left0)/left0[-1]
+        m1 = l1[which.max(lside)+1]
       }
-      #}
+      
+      m2=r2
+      if(length(r2)>1){
+        rside = diff(right0)/right0[-1]
+        m2 = r2[which.min(rside)] 
+      }
+      
+      finalMut = getMafSum(c(m1,m2), submaf = allsub)
+      ftmp = dim(finalMut[[3]])[1]
+      
+      if(ftmp>1){
+        
+        mm=subset(datin, datin$position >= m1 & datin$position <= m2)
+        mintmp=which.min(mm$mutrate)
+        ntmp=dim(mm)[1]
+        
+        mm$SNR=rep(x[3], ntmp)
+        
+        peakpos=mm$position[mintmp]
+        peakmin=mm$mutrate[mintmp]
+        
+        leftpos=min(mm$position)
+        rightpos=max(mm$position)
+        
+        numberP = finalMut[[1]][2]
+        
+        resout=c(chrIn,peakpos,peakmin,leftpos,rightpos,numberP,mm$SNR[1],finalMut[[1]][1], datin$position[x[1]],datin$position[x[2]], 
+                 omutpkb, max(left0),max(right0), finalMut[[2]]) ### there are two items in finalMut[[2]], totally 14 items
+        resout=data.frame(t(resout), stringsAsFactors = F)
+        colnames(resout) = c("chr","peakMinPosition", "peakMin_mutrate", "LeftPosition", "RightPosition","numberOfPatients","SNR",
+                             "mutPerKb","originalLeftPos", "originalRightPos", "original_mutPerKb","max_mutPerKbLeft","max_mutPerKbRight",
+                             "mostFreqClassification","mostFreqGeneSymbol")
+        resout[,2:13] = apply(resout[,2:13],2,FUN = function(xx) as.numeric(xx))
+        
+        pn=dim(mm)[1]
+        if(pn>1){
+          restmp=apply(resout, 2, function(co) rep(co, each = pn))  
+        }else{
+          restmp=resout
+        }
+        restmp = data.frame(restmp, stringsAsFactors = F)
+        restmp[,2:13] = apply(restmp[,2:13],2,FUN = function(xx) as.numeric(xx))
+        stmp = which(colnames(mm)=="SNR")
+        mm = mm[,-stmp]
+        mm = cbind(restmp,mm)
+        mafout = finalMut[[3]]
+        nm = dim(mafout)[1]
+        maftmp=apply(resout, 2, function(co) rep(co, each = nm))  ### the matrix is ok, but the data format is not correct
+        maftmp = data.frame(maftmp, stringsAsFactors = F)
+        maftmp[,2:13] = apply(maftmp[,2:13],2,FUN = function(xx) as.numeric(xx))
+        mafout = cbind(maftmp, mafout)
+      }else{
+        resout = NA
+        mafout=NA
+      }
+      
+    }else{
+      resout = NA
+      mafout=NA
+      
     }
     
-    return(list(resout,tm))
+    return(list(resout,mm,mafout))
   })
   
   flagtmp=sapply(out,FUN=function(outx){
-    tmp=outx[[1]][1]
-    return(sum(tmp))
+    tmp=outx[[1]][2]
   })
   
   rm(datin)
@@ -142,16 +309,13 @@ peakSearch=function(datin, noPatCut=patient_minimum, snrperc=0.95){
   
 }
 
-##### end of the new peak searching function 
-###############################################
 
-
-#############################################
-chrPeaks=function(chrfile, spliting, snrperCut=0.95){
+chrPeaks=function(chrfile, mafdat, spliting, snrperCut=0.95, ext1side =10000, mutPerKbcut = 5){
   
-  dat=read.table(file = chrfile, sep = '\t', header = TRUE, stringsAsFactors = F) 
+  dat=read.delim(file = chrfile, header = TRUE, stringsAsFactors = F) 
   
-  #### to avoid problems, remove -inf rows
+  print(chrfile)
+  
   itmp=which(is.infinite(dat$mutrate))
   if(length(itmp)>0){
     dat=dat[-itmp,]
@@ -163,9 +327,9 @@ chrPeaks=function(chrfile, spliting, snrperCut=0.95){
   
   duppos=which(duplicated(odat$position))
   duppos=unique(odat$position[duppos])
-
+  
   lapply(duppos,FUN=function(apos){
-    tmpdat=subset(odat,odat$position==apos)   #### treat odat as a global obj without passing it into this function
+    tmpdat=subset(odat,odat$position==apos)   
     tt=as.numeric(rownames(tmpdat))
     maxo=which.min(tmpdat$mutrate) 
     newdat=tmpdat
@@ -190,196 +354,184 @@ chrPeaks=function(chrfile, spliting, snrperCut=0.95){
     odat[tt,]=outdat
   })
   
-  datres=peakSearch(datin=odat, snrperc = snrperCut)
-  
-  rm(odat)
-  gc()
-  
-  numres=t(sapply(datres,FUN=function(x){
-    return(x[[1]])
-  }))
-  colnames(numres)=c("peakPosition","peakMinValue","leftPosition","rightPosition","numberPatients","SNR")
-
-  numres=data.frame(numres)
   outfile=strsplit(chrfile, split=spliting)
   outfile=outfile[[1]][2]
   outfile=gsub("\\.","",outfile)
   outfile=gsub("tsv","",outfile)
-  numres$chromosome=rep(outfile,dim(numres)[1])
-  
-  patres=lapply(datres,FUN=function(x){
-    x=x[[2]]
-    x$chromosome=rep(outfile,dim(x)[1])
-    colnames(x)[1:3]=c("peakPosition","leftPosition","rightPosition")
-    return(x)
-  })
-  
-  allranges=numres[,3:4]
-  allouts=apply(allranges,1,FUN=function(x){
-    tmp=apply(allranges,1,FUN=function(oneRange){
-      if(oneRange[1]>x[2] | oneRange[2]<x[1]){
-        return(0)
-      }else{
-        return(1)
-      }
-    })
-    tmp=which(tmp>0)
-    
-    if(length(tmp)>1){
-      tmpdat=numres[tmp,]
-  
-      numtmp=tmpdat[1,]
-      numtmp[1]=tmpdat[which.min(tmpdat[,2]),1]
-      numtmp[2]=min(tmpdat[,2])
-      numtmp[3]=min(tmpdat[,3])
-      numtmp[4]=max(tmpdat[,4])
-      numtmp[6]=min(tmpdat[,6])
-      pattmp=do.call(rbind, lapply(tmp,FUN=function(yy){patres[[yy]]}))
-      pattmp=pattmp[!duplicated(pattmp[,c(6:7)]),]
-      ntmp=dim(pattmp)[1]
-      numtmp[5]=length(unique(pattmp$patient))
-      pattmp$peakPosition=rep(as.numeric(numtmp[1]),ntmp)
-      pattmp$leftPosition=rep(as.numeric(numtmp[3]),ntmp)
-      pattmp$rightPosition=rep(as.numeric(numtmp[4]),ntmp)
-      pattmp$SNR = rep(as.numeric(numtmp[6]), ntmp)
-    }else{
-      numtmp=numres[tmp,]
-      pattmp=patres[[tmp]]
-    }
-    
-    ##### add extra columns for mean mutrate, sd mutrate, mut_per_kb, 
-    ntmp=dim(pattmp)[1]
-    numtmp[8]=mean(pattmp$mutrate)
-    numtmp[9]=sd(pattmp$mutrate)
-    numtmp[10]=1000 * ntmp / (numtmp[4] - numtmp[3]  + 1)
-    pattmp$meanOfmutrate=rep(as.numeric(numtmp[8]),ntmp)
-    pattmp$sdOfmutrate=rep(as.numeric(numtmp[9]),ntmp)
-    pattmp$mutPerKb=rep(as.numeric(numtmp[10]),ntmp)
-    
-    return(list(numtmp, pattmp))
-    
-  })
-  
-  rm(datres)
+
+  datres=peakSearch(datin=odat, snrperc = snrperCut, hKmExt = ext1side, countPerKbcut = mutPerKbcut,
+                     chrIn=outfile, mafIn =  mafdat) 
+  rm(odat)
   gc()
   
+  out1 = do.call(rbind, lapply(datres,FUN=function(xx) xx[[1]]))
+  out2 = do.call(rbind, lapply(datres,FUN=function(xx) xx[[2]]))
+  out3 = do.call(rbind, lapply(datres,FUN=function(xx) xx[[3]]))
   
-  #### build up two data.frame to return
-  allnum=sapply(allouts,FUN=function(reslist){
-    return(reslist[1])
-  })
-  allnum=do.call(rbind,allnum)
-  colnames(allnum)[8:10]=c("meanOfmutrate","sdOfmutrate","mutPerKb")
-  
-  allpat=sapply(allouts,FUN=function(reslist){
-    return(reslist[2])
-  })
-  allpat=do.call(rbind,allpat)
-  
-  ##### remove duplicated
-  allnum=allnum[!duplicated(allnum$peakPosition),]
-  allpat=allpat[!duplicated(allpat[,c("patient","position")]),]
-  
-  rm(allouts)
-  gc()
-  
-  return(list(allnum,allpat))
+  return(list(out1,out2,out3))  
   
 }
 
-finalres=sapply(files, chrPeaks, spliting=sepchr)
+filterPeaks = function(peakrow, minPeakWidth, maxPeakWidth, noPatCut,mutRateCut){
+  tmp1 = ifelse((peakrow[6] - peakrow[5]+1) >= minPeakWidth, 0, 1)
+  tmp2 = ifelse((peakrow[2] - peakrow[1] +1) <= maxPeakWidth, 0, 1)
+  tmp3 = ifelse(peakrow[3] >= noPatCut, 0, 1)
+  tmp4 = ifelse(peakrow[4]>= mutRateCut, 0, 1) 
+  tmps = sum(tmp1,tmp2,tmp3,tmp4)
+  tmps = sum(tmp1,tmp2,tmp3)
+  out = ifelse(tmps>=1, 1, 0)
+  return(out)
+}
 
-##### build up two matrix across chrs
-nn=length(finalres)
-ii=c(1:nn)
-m1=which(ii %% 2 == 1)
-m2=which(ii %% 2 == 0)
-
-m1res=finalres[m1]
-m1res=do.call(rbind,m1res)
-m2res=finalres[m2]
-m2res=do.call(rbind,m2res)
-
-write.table(m1res, paste(outname, "waveletSummary.tsv", sep=""),sep = '\t',quote = F) 
-write.table(m2res, paste(outname, "waveletPatientDetail.tsv", sep=""),sep = '\t',quote = F) 
-
-maf.full = read.maf(maf.file,useAll = T, removeSilent = F)
-mafs=data.frame(maf.full@data)
-rm(maf.full)
-gc()
-
-withMaf=function(awave,patRains, mafFile, mutrateKbCut){
-  #### calculate mutrate per kb, if it pass a cutoff, then move on, otherwise return NA
-  tmp=subset(mafFile,mafFile$Chromosome == as.character(awave[7]) & mafFile$Start_Position >= as.integer(awave[3]) 
-             & mafFile$Start_Position <= as.integer(awave[4]))
+extractMaf1peak=function(awave,mafFileIn){  
   
-  tn=dim(tmp)[1]
-  mutkb=1000 * tn / ( as.integer(awave[4]) -  as.integer(awave[3])  + 1)
-  outs=NA
-  if(mutkb>=mutrateKbCut){
-    #### find the most freq variant_classification, since each entry in mafFile has an efficient Variant_Classification
-    #### we do not need to worry about NA or null...
-    vc=tmp$Variant_Classification
-    vc=table(vc)
-    vc=names(which.max(vc))
-    
-    #### merge thing, no need the chromosome within a peak range, but do need position and patient
-    #### find the subset from the patRains 
-    ptmp=subset(patRains, patRains$chromosome==as.character(awave[7]) & patRains$peakPosition == as.integer(awave[1]))
-    #### for tmp, we need Start_Position and Tumor_Sample_Barcode
-    #### for ptmp, need position and patient
-    alltmp=merge(ptmp, tmp, by.x=c("position","patient"), by.y=c("Start_Position","Tumor_Sample_Barcode"), all=TRUE)
-    
-    ####for these have NA, input: peakPosition leftPosition rightPosition SNR chromosome meanOfmutrate sdOfmutrate mutPerKb
-    tt=which(is.na(alltmp$peakPosition))
-    ttt=alltmp[-tt,]
-    alltmp[tt,c(3:5,9:13)]=ttt[1,c(3:5,9:13)]
-    
-    nall=dim(alltmp)[1]
-    #### add more columns in, awave[2], new number of patient column, mutkb, and vc
-    
-    newcol=data.frame(cbind(rep(as.numeric(awave[2]),nall),rep(length(unique(alltmp$patient)),nall),rep(mutkb, nall)))
-    colnames(newcol)=c("peakMinValue","numberPatients","mutPerKbMaf")
-    newcol$mostFreqVClassification = rep(vc,nall)
-    
-    outs=data.frame(cbind(alltmp[,c(10,4:5,3)], newcol,alltmp[,-c(10,4:5,3)]))
-  }
+  names(awave) = c("chromosome", "leftPosition",  "rightPosition")
+  awave = data.frame(t(awave), stringsAsFactors = F)
+  awave$leftPosition = as.integer(awave$leftPosition)
+  awave$rightPosition = as.integer(awave$rightPosition)
+  awave = data.table(awave, key =  c("chromosome", "leftPosition",  "rightPosition"))
   
+  ##### add one line on July 20, 2018
+  ### add one line here on July 20
+  mafFileIn = data.table(mafFileIn, key = c("Chromosome", "Start_Position", "End_Position"))
+  
+  mafsum = foverlaps(x=mafFileIn, y=awave, by.x=c("Chromosome", "Start_Position", "End_Position"), by.y = c("chromosome", "leftPosition",  "rightPosition"))
+  mafsum = mafsum[!is.na(mafsum$leftPosition),]
+  
+  tn=dim(mafsum)[1]
+  mutkb=1000 * tn / (awave$rightPosition - awave$leftPosition + 1)
+  
+  vc=mafsum$Variant_Classification
+  vc=table(vc)
+  vc=names(which.max(vc))
+  
+  syms=mafsum$Hugo_Symbo
+  syms = syms[which(syms != "Unknown" & syms != "")]
+  syms=table(syms)
+  syms=names(which.max(syms))
+  
+  if(length(syms)==0){syms= "Unknown"}
+  
+  pts = mafsum$Tumor_Sample_Barcode
+  pts = length(unique(pts))
+  
+  outs = list(c(mutkb,pts),c(vc,syms),mafsum)
   return(outs)
+  
 }
 
-mafm1res=apply(m1res,1,withMaf,patRains=m2res, mafFile=mafs, mutrateKbCut=6)
-mafm1res=do.call(rbind, mafm1res)
-#### remove all of the NAs
-mafm1res=mafm1res[!is.na(mafm1res$chromosome),]
 
-write.table(mafm1res,paste(outname,"waveletPatientDetail_withMaf.tsv", sep=""),sep = '\t',quote = F) 
+updateWaveouts = function(apeak, mafdat, oldwaves){
+  
+  finalMut = extractMaf1peak(awave = apeak, mafFileIn = mafdat)
+  m1 = as.integer(apeak[2])
+  m2 = as.integer(apeak[3])
+  mm=subset(oldwaves, oldwaves$LeftPosition >= m1 & oldwaves$RightPosition <= m2)
+  mintmp=which.min(mm$peakMin_mutrate)
+  ntmp=dim(mm)[1]
+  
+  meanSNR= mean(mm$SNR)
+  
+  peakpos=mm$peakMinPosition[mintmp]
+  peakmin=mm$peakMin_mutrate[mintmp]
+  
+  leftpos=m1
+  rightpos=m2
+  numberP = finalMut[[1]][2]
+  
+  resout=c(apeak[1],peakpos,peakmin,leftpos,rightpos,numberP,meanSNR,finalMut[[1]][1], finalMut[[2]]) ### 10 items
+  resout=data.frame(t(resout), stringsAsFactors = F)
+  colnames(resout) = c("chr","peakMinPosition", "peakMin_mutrate", "LeftPosition", "RightPosition","numberOfPatients","meanSNR",
+                       "mutPerKb", "mostFreqClassification","mostFreqGeneSymbol")
+  resout[,2:8] = apply(resout[,2:8],2,FUN = function(xx) as.numeric(xx))
+  mafout = finalMut[[3]]
+  nm = dim(mafout)[1]
+  maftmp=apply(resout, 2, function(co) rep(co, each = nm))
+  maftmp = data.frame(maftmp, stringsAsFactors = F)
+  maftmp[,2:8] = apply(maftmp[,2:8],2,FUN = function(xx) as.numeric(xx))
+  mafout = cbind(maftmp, mafout)
+  
+  return(list(resout,mafout))  
+  
+}
 
-#### get the summary one row per peak range as well
-sumres=mafm1res[,c(1:8,14:18)]
 
-tmp=unique(sumres[,c(1:4)])
-getHGall=function(x){
-  subdat=subset(sumres, sumres$chromosome==as.character(x[1]) & sumres$leftPosition == as.integer(x[2])
-                & sumres$rightPosition == as.integer(x[3]) & sumres$peakPosition == as.integer(x[4]))
-  hg=table(subdat$Hugo_Symbol)
-  tt=NA
-  if(length(hg)>0){
-    tt=subdat$Hugo_Symbol[which.max(hg)]
+###############################################################
+### the following is to apply above functions to get basic wavelet peaks
+
+finalres=lapply(files, chrPeaks, mafdat = maf.full, spliting=sepchr,ext1side = peakExt1side, mutPerKbcut = mutRateCut)
+out1 = do.call(rbind, lapply(finalres,FUN=function(xx) xx[[1]]))
+out2 = do.call(rbind, lapply(finalres,FUN=function(xx) xx[[2]]))
+out3 = do.call(rbind, lapply(finalres,FUN=function(xx) xx[[3]]))
+
+write.table(out1, paste(outname, "waveletMaxChangeSummary.tsv", sep=""),sep = '\t',quote = F) 
+write.table(out2, paste(outname, "waveletMaxChangePatientDetail.tsv", sep=""),sep = '\t',quote = F)
+write.table(out3, paste(outname, "waveletMaxChangePatientDetailWithMaf.tsv", sep=""),sep = '\t',quote = F)
+
+
+
+########################################################################
+#### post process steps
+
+## since in the previous step, noPatCut is in %, need to convert to integer based on given number of patients 
+allpts = unique(maf.full$Tumor_Sample_Barcode)
+allpts = length(allpts)
+
+noPatCut = as.integer( allpts * noPatCut/100)
+
+
+##################################################################################
+##### apply post-process
+
+if(postflag == 1) {
+  
+  wout1 = out1[,c(4:6,8,9:10)]
+  filout1 = apply(wout1, 1, filterPeaks, minPeakWidth, maxPeakWidth, noPatCut,mutRateCut)
+  tmp0 = which(filout1<1)
+  outf1 = out1[tmp0,]
+  
+  rangeDat = outf1[,c(1,4:5)]
+  dim(rangeDat)  
+  
+  rangeDat$range = paste(rangeDat$chr, rangeDat$LeftPosition, sep=":")
+  rangeDat$range = paste(rangeDat$range, rangeDat$RightPosition, sep="-") 
+  
+  ##################################################
+  ### since some maf and rainstorm chr format might not contain "chr"
+  ### should add it in both before using bedr.merge.region function
+  tmp = grep("chr", rangeDat$range)
+  if(length(tmp) <1){
+    rangeDat$range = paste("chr", rangeDat$range, sep="")
   }
-  subdat$Hugo_Symbol[1]=tt
-  subdat=subdat[1,]
+  
+  ##################################################
+  
+  mranges = bedr.merge.region(rangeDat$range, distance = distcut) 
+  
+  mRangeDat = t(sapply(mranges,FUN = function(xx){
+    t1=strsplit(xx,split=":")
+    t2=strsplit(t1[[1]][2], split="-")
+    return(c(t1[[1]][1],t2[[1]][1],t2[[1]][2]))
+  }))
+  
+  ##################################
+  ### when tmp add chr, should remove it out again before next step
+  if(length(tmp) < 1){
+    mRangeDat[,1] = gsub("chr","", mRangeDat[,1])
+  }
+  
+  ##################################
+  
+  finalout = apply(mRangeDat, 1, updateWaveouts,  mafdat=maf.full, oldwaves = outf1)
+  
+  sumdat = lapply(finalout, FUN=function(xx) xx[[1]])
+  sumdat = do.call(rbind, sumdat)
+  
+  mafout = lapply(finalout, FUN=function(xx) xx[[2]])
+  mafout = do.call(rbind, mafout)
+  
+  write.table(sumdat, paste(outname, "FilterMergeSummary.tsv", sep=""), sep = '\t',quote = F) 
+  write.table(mafout, paste(outname, "FilterMergeDetailWithMaf.tsv", sep=""),sep = '\t',quote = F)
+  
 }
-ss=apply(tmp,1,getHGall)
-ss=do.call(rbind,ss)
-
-
-write.table(ss,paste(outname, "waveletSummary_withMaf.tsv",sep=""),sep = '\t',quote = F) 
-
-
-gc()
-
-quit()
-
-
 
