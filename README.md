@@ -130,7 +130,7 @@ ggplot(mutmaf,aes(x=position,y=mutrate,color=patient)) + geom_point(alpha=0.4,si
 
 ### References
 
-The algorithm is described in gory detail in Arthur et al. Nature Communications (in press). We submitted it to Nature in October, 2017. Realllly hoping it comes out before the 1 year anniversary of its first submission! Link will be added here once it is available. We are also happy to share preprints directly on request. Contact: rdmorin AT sfu DAWT ca. 
+[The algorithm is described in detail in Arthur et al. Nature Communications (2018).](https://www.nature.com/articles/s41467-018-06354-3)
 
 ### External links
  * [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
