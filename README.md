@@ -138,3 +138,7 @@ The algorithm is described in gory detail in Arthur et al. Nature Communications
  * [BC Cancer Agency's Genome Sciences Centre](http://bcgsc.ca/)
 
  * [Cancer Genomics in Galaxy](https://github.com/morinlab/tools-morinlab)
+ 
+### Contact
+rdmorin@sfu.ca
+@morinryan (Twitter)
