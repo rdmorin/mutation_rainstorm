@@ -133,7 +133,7 @@ ggplot(mutmaf,aes(x=position,y=mutrate,color=patient)) + geom_point(alpha=0.4,si
 [The algorithm is described in detail in Arthur et al. Nature Communications (2018).](https://www.nature.com/articles/s41467-018-06354-3)
 
 ### External links
- * [The Morin Laboratory at Simon Fraser University](https://www.sfu.ca/mbb/research/research-groups/morin.html)
+ * [The Morin Laboratory at Simon Fraser University](https://morinlab.github.io/team/)
 
  * [BC Cancer Agency's Genome Sciences Centre](http://bcgsc.ca/)
 
