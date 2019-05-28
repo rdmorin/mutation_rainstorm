@@ -9,7 +9,7 @@ import argparse as ap
 import pyranges as pr
 import pandas as pd
 import numpy as np
-import multiprocessing
+import multiprocessing as mp
 import os
 import logging
 import pymaf
@@ -109,6 +109,11 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     keepdist = np.apply_along_axis(offby_mutations, 1, distsort, offby=offby, use_mean=use_mean)
     IDs.append(id)
     return pd.DataFrame({'position': thesemut, 'mindist': keepdist})
+
+
+def runByCaseSmooth_multiprocess(case, maf, model, variants, IDs, chrom, start, end, nathres=0.3, offby=3):
+    output = runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres, offby)
+    return case, output
 
 
 def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=0.3, offby=3):
@@ -273,7 +278,7 @@ if __name__ == '__main__':
         binlength = 100000
 
         for chrom in goodchrom:
-            print(chrom)
+            logger.info("Calculating {0}".format(chrom))
             patient = IDs[0]
             snvs_df_subset = snvs.df.loc[snvs.df['Tumor_Sample_Barcode'] == IDs[0]]
             snvs_subset = pr.PyRanges(snvs_df_subset)
@@ -332,13 +337,25 @@ if __name__ == '__main__':
         end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].idxmax(axis='columns')
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
         # model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
-        model = loess.loess(data['counts'], data['starts'], {'span': 0.01, 'surface': 'direct'})
-        model.fit()
+        success = False
+        span = 0.01
+        while not success:
+            try:
+                model = loess.loess(data['counts'], data['starts'], {'span': span, 'surface': 'direct'})
+                model.fit()
+                success = True
+            except:
+                span += 0.02
 
         if param.cpu_num > 1:
-            all_data_all_patients = {case: runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
-                                                           param.nathres, param.off_by)
-                                     for case in IDs}  # parallelize this
+            pool = mp.Pool(processes=param.cpu_num)
+            outputs = [pool.apply(runByCaseSmooth_multiprocess, args=(case, maf, model, variants, IDs, chrom, start,
+                                                                      end, param.nathres, param.off_by))
+                       for case in IDs]
+            all_data_all_patients = dict(outputs)
+            # all_data_all_patients = {case: runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
+            #                                                param.nathres, param.off_by)
+            #                          for case in IDs}  # parallelize this
         else:
             start_time = time.time()
             case_times = {}
