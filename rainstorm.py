@@ -209,7 +209,7 @@ if __name__ == '__main__':
     parser.add_argument('-ll', '--loglevel', type=str, default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the logging level')
-    parser.add_argument('-m', '--input_maf', type=str, metavar='INPUT_MAF',
+    parser.add_argument('-i', '--input_maf', type=str, metavar='INPUT_MAF',
                         help='MAF file containing mutation calls from many patient genomes')
     parser.add_argument('-nc', '--nonCoding', action='store_true', default=False,
                         help='Limit to non-coding range only')
