@@ -163,9 +163,10 @@ def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=
 
 
 def viewMeans(bins, cvg):
-    mean_per_bin = []
-    mut_index = cvg.values.nonzero()
-    mut_loc = deque()
+    # mean_per_bin = []
+    mut_index = cvg.values.nonzero()[0]
+    # mut_loc = deque()
+    mut_loc = []
     loc = 0
 
     for ind, run in enumerate(cvg.runs):
@@ -173,23 +174,34 @@ def viewMeans(bins, cvg):
         if ind in mut_index:
             mut_loc.append(loc)
 
-    for _,bin in bins.df.iterrows():
-        count = 0
-        while bin['Start'] <= mut_loc[0] < bin['End']:
-            count += 1
-            mut_loc.popleft()
-        mean = float(count) / (float(bin['End']) - float(bin['Start']))
-        mean_per_bin.append(mean)
+    # for _,bin in bins.iterrows():
+    #     count = 0
+    #     while len(mut_loc) > 0 and bin['Start'] <= mut_loc[0] < bin['End']:
+    #         count += 1
+    #         mut_loc.popleft()
+    #     mean = float(count) / (float(bin['End']) - float(bin['Start']))
+    #     mean_per_bin.append(mean)
 
-    return mean_per_bin
+    bins['binned_score'] = 0.0
+
+    for mut in mut_loc:
+        bins.loc[(bins['Start'] <= mut) & (bins['End'] > mut), 'binned_score'] += 1
+
+    mask = (bins['binned_score'] != 0.0)
+    bins_valid = bins[mask]
+
+    bins.loc[mask, 'binned_score'] /= (bins_valid['End'] - bins_valid['Start'])
+
+    # return mean_per_bin
+    return bins['binned_score'].values
 
 
 def binnedAverage(bins, cvg):
     bins_per_chrom = {chrom: chrom_df for chrom, chrom_df in bins.df.groupby('Chromosome')}
     means_list = []
 
-    for chrom in means_list:
-        means_list.append(viewMeans(bins_per_chrom[chrom], cvg[chrom]))
+    for chrom in bins_per_chrom.keys():
+        means_list += viewMeans(bins_per_chrom[chrom], cvg[chrom])
     bins.binned_score = means_list
     return bins
 
@@ -262,14 +274,14 @@ if __name__ == '__main__':
     else:
         variants = maf.codingVars
 
-    goodchrom = chrlengths.index
+    goodchrom = chrlengths['Chromosome'].values
 
     pyrange_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
     pyrange_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     snvs = pr.PyRanges(pyrange_df)
 
     if not param.calc_background:
-        bins_chr = chrlengths_pr.windows(100000, tile=True)
+        bins_chr = chrlengths_pr.window(100000, tile=True)
 
         bincounts_all = []
         binstarts_all = []
@@ -296,12 +308,12 @@ if __name__ == '__main__':
                 patient = IDs[num]
                 snvs_df_subset = snvs.df.loc[snvs.df['Tumor_Sample_Barcode'] == IDs[0]]
 
-                cvg = snvs_subset.coverage(strand=True)
+                cvg = snvs_subset.coverage()
                 npat_tot = snvs_df_subset.shape[0]
 
                 tile = binnedAverage(bins_chr, cvg)
                 a = tile[chrom].df['binned_score']
-                testmat[:, num] = a[:2433]
+                testmat[:, num] = a[:ntile]
 
                 # r <- runsum(cvg, 1) --> doesn't actually do anything?
 
