@@ -333,10 +333,10 @@ if __name__ == '__main__':
         # Load this next file in as a data frame to skip the steps leading up to this line
         cols = {'chrom': bincounts_chrom, 'starts': binstarts_all, 'ends': binstops_all, 'counts': bincounts_all}
         all_df = pd.DataFrame(cols, index=None)
-        all_df.to_csv(os.path.join(param.output_base_name, '_background_100k_binned_density.tsv'), sep='\t',
+        all_df.to_csv(param.output_base_name+'_background_100k_binned_density.tsv', sep='\t',
                       index=False)
     else:
-        all_df = pd.read_csv(os.path.join(param.output_base_name, '_background_100k_binned_density.tsv'), sep='\t')
+        all_df = pd.read_csv(param.output_base_name+'_background_100k_binned_density.tsv', sep='\t')
 
     n = len(IDs) + 22
     '''
