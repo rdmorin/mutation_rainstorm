@@ -193,16 +193,17 @@ def viewMeans(bins, cvg):
     bins.loc[mask, 'binned_score'] /= (bins_valid['End'] - bins_valid['Start'])
 
     # return mean_per_bin
-    return bins['binned_score'].values
+    return bins['binned_score'].values.tolist()
 
 
 def binnedAverage(bins, cvg):
-    bins_per_chrom = {chrom: chrom_df for chrom, chrom_df in bins.df.groupby('Chromosome')}
-    means_list = []
+    # bins_per_chrom = {chrom: chrom_df for chrom, chrom_df in bins.df.groupby('Chromosome')}
+    # means_list = []
 
-    for chrom in bins_per_chrom.keys():
-        means_list += viewMeans(bins_per_chrom[chrom], cvg[chrom])
-    bins.binned_score = means_list
+    # for chrom in bins_per_chrom.keys():
+    #     means_list += viewMeans(bins_per_chrom[chrom], cvg[chrom])
+    # bins.binned_score = means_list
+    bins.binned_score = viewMeans(bins.df, cvg)
     return bins
 
 
@@ -298,7 +299,7 @@ if __name__ == '__main__':
             cvg = snvs_subset.coverage()
             npat_tot = snvs_df_subset.shape[0]
 
-            tile = binnedAverage(bins_chr, cvg)
+            tile = binnedAverage(bins_chr[chrom], cvg[chrom])
             ntile = len(tile[chrom].df['binned_score'])
             testmat = np.empty((ntile, len(IDs)))
 
@@ -311,7 +312,7 @@ if __name__ == '__main__':
                 cvg = snvs_subset.coverage()
                 npat_tot = snvs_df_subset.shape[0]
 
-                tile = binnedAverage(bins_chr, cvg)
+                tile = binnedAverage(bins_chr[chrom], cvg[chrom])
                 a = tile[chrom].df['binned_score']
                 testmat[:, num] = a[:ntile]
 
