@@ -345,7 +345,7 @@ if __name__ == '__main__':
     '''
 
     for chrom in goodchrom:
-        print("Running calculation for {0}".format(str(chrom)))
+        logger.info("Running calculation for {0}".format(str(chrom)))
         start = 1
         end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].idxmax(axis='columns')
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
