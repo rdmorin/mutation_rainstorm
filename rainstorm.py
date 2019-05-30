@@ -263,7 +263,7 @@ if __name__ == '__main__':
     chrlengths.columns = ['Chromosome', 'Start', 'End']
     chrlengths_pr = pr.PyRanges(chrlengths)
 
-    maf = pymaf.MAF(param.maf)
+    maf = pymaf.MAF(param.input_maf)
 
     # Get IDs of cases passing the max mutation criteria
     IDs = maf.variant_count[maf.variant_count.Variants < param.max_mut]['Tumor_Sample_Barcode']
