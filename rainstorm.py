@@ -5,6 +5,7 @@ Based on the R version created by Ryan Morin and Aixiang Jang, 2017
 Author: Matthew Nguyen, 2019
 '''
 
+import pdb
 import argparse as ap
 import pyranges as pr
 import pandas as pd
@@ -354,7 +355,7 @@ if __name__ == '__main__':
         span = 0.01
         while not success:
             try:
-                model = loess.loess(data['counts'], data['starts'], {'span': span, 'surface': 'direct'})
+                model = loess.loess(data['counts'], data['starts'], span=span, surface='direct')
                 model.fit()
                 success = True
             except:
