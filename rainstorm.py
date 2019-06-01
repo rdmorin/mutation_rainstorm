@@ -278,9 +278,9 @@ if __name__ == '__main__':
 
     goodchrom = chrlengths['Chromosome'].values
 
-    pyrange_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
-    pyrange_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
-    snvs = pr.PyRanges(pyrange_df)
+    snvs_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+    snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
+    snvs_df['End'] += 1
 
     if not param.calc_background:
         bins_chr = chrlengths_pr.window(100000, tile=True)
@@ -294,7 +294,7 @@ if __name__ == '__main__':
         for chrom in goodchrom:
             logger.info("Calculating {0}".format(chrom))
             patient = IDs[0]
-            snvs_df_subset = snvs.df.loc[snvs.df['Tumor_Sample_Barcode'] == IDs[0]]
+            snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[0]]
             snvs_subset = pr.PyRanges(snvs_df_subset)
 
             cvg = snvs_subset.coverage()
@@ -308,7 +308,7 @@ if __name__ == '__main__':
 
             for num in range(len(IDs)):
                 patient = IDs[num]
-                snvs_df_subset = snvs.df.loc[snvs.df['Tumor_Sample_Barcode'] == IDs[0]]
+                snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[0]]
 
                 cvg = snvs_subset.coverage()
                 npat_tot = snvs_df_subset.shape[0]
@@ -352,10 +352,12 @@ if __name__ == '__main__':
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
         # model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
         success = False
-        span = 0.01
+        # span = 0.01
+        span = 0.1
         while not success:
             try:
-                model = loess.loess(data['counts'], data['starts'], span=span, surface='direct')
+                # todo: currently loess loops infinitely for span that is too small
+                model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
                 model.fit()
                 success = True
             except:
