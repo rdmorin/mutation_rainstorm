@@ -18,7 +18,7 @@ import skmisc.loess as loess
 import time
 import math
 
-from collections import deque
+pd.options.mode.chained_assignment = None
 
 logger = logging.getLogger()
 
@@ -30,7 +30,7 @@ Uses a loess model that fits a smoothed curve to the mutation rate across the ch
 def correctLocalMutrate(positions, distval, model, logged_mutrate):
     # predrate =  predict(model,newdata=data.frame(starts=positions))
     predrate = model.predict(positions)
-    adjusted = np.log(distval + predrate + logged_mutrate)
+    adjusted = np.log(distval + predrate.values + logged_mutrate)
     return adjusted
 
 
@@ -44,17 +44,17 @@ def getMutDists(pos1, pos2):
     if len(pos1) == 0 or len(pos2) == 0:
         return [np.nan] * len(pos1)
 
-    pos2 += [1000000000]  # To ensure last p1 position always gets a diff value
+    pos2 = np.append(pos2, 1000000000)  # To ensure last p1 position always gets a diff value
     these = pd.DataFrame({'names': (['p1'] * len(pos1)) + (['p2'] * len(pos2)), 'mut': np.concatenate((pos1, pos2))})
 
     # Sort on position
     sorted = these.sort_values('mut')
     diffs = sorted.iloc[:-1]
-    diffs['mut'] = np.diff(sorted['mut'])
+    diffs.loc[:, 'mut'] = np.diff(sorted['mut'])
     # Determine adjacencies in the same genome (to mask out as NA)
     sorted['names_shifted'] = sorted['names'].shift(-1)
     adjacents = sorted.index[sorted['names'] == sorted['names_shifted']].tolist()
-    diffs[adjacents, 'mut'] = np.nan
+    diffs.loc[adjacents, 'mut'] = np.nan
     # keep only the positions with names indicating they derive from a position in p1
     pos1diffs = diffs.loc[diffs['names'] == 'p1', 'mut'].values
     return pos1diffs
@@ -98,11 +98,11 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     # before removing any cases where every value is NA,
     # the indexes in alldists correspond to the mutation positions in thesemut
     # need to mark all-NA positions for removal and removal of corresponding position in thesemut
-    # this command removes any patient that contribued only NAs to the matrix
+    # this command removes any patient that contributed only NAs to the matrix
 
-    allna = distmat.columns[distmat.notna().sum(0) > 1].tolist()
+    allna = pd.isnull(distmat).all(1).to_numpy().nonzero()[0]
     if len(allna) > 0:
-        distmat = distmat.drop(columns=allna)
+        distmat = distmat.drop(index=allna)
         thesemut = np.delete(thesemut, allna)
 
     distsort = np.sort(distmat.values.transpose())
@@ -122,16 +122,19 @@ def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=
     stored_all = dict()
     use_mean = True
 
-    these = getMinDistByGenome(maf, case, chrom, IDs, start, end, offby=offby, use_mean=use_mean)
+    these = getMinDistByGenome(maf, case, chrom, IDs.tolist(), start, end, offby=offby, use_mean=use_mean)
 
     if these.shape[0] == 0:
         logger.info("Skip due to lack of mutations on chromosome {0}".format(case))
         return stored_all
 
     density_table = these.isna()
+    density_table_true = density_table['position'].sum() + density_table['mindist'].sum()
+    density_table_false = (len(density_table) - density_table['position'].sum()) + \
+                          (len(density_table) - density_table['mindist'].sum())
 
-    if density_table.size > 1:
-        if density_table[1] / density_table[0] > nathres:
+    if density_table_false > 0 and density_table_true > 0:
+        if density_table_false / density_table_true > nathres:
             logger.info("Skip due to high NA count {0}".format(case))
             return stored_all
 
@@ -147,7 +150,7 @@ def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=
 
     # Should we get rid of all NA values first? Seems reasonable since they're being counted here in the denominator?
     # Though they are in fact mutations, so maybe not...
-    scaled = math.log(these_keep['mindist']+1) + math.log(genometot) - math.log(280000000)
+    scaled = these_keep['mindist'].apply(lambda x: math.log(x+1) + math.log(genometot) - math.log(280000000))
     # Add one to get rid of the annoying -Inf issue. These are definitely things that need to be retained.
     scaled -= np.median(scaled)
     localadj = correctLocalMutrate(these_keep['position'], these_keep['mindist']+1, model, ltot)
@@ -348,7 +351,7 @@ if __name__ == '__main__':
     for chrom in goodchrom:
         logger.info("Running calculation for {0}".format(str(chrom)))
         start = 1
-        end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].idxmax(axis='columns')
+        end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
         # model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
         success = False
@@ -366,7 +369,7 @@ if __name__ == '__main__':
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
             outputs = [pool.apply(runByCaseSmooth_multiprocess, args=(case, maf, model, variants, IDs, chrom, start,
-                                                                      end, param.nathres, param.off_by))
+                                                                      end, param.nathresh, param.off_by))
                        for case in IDs]
             all_data_all_patients = dict(outputs)
             # all_data_all_patients = {case: runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
