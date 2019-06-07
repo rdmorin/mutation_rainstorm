@@ -17,6 +17,7 @@ import pymaf
 import skmisc.loess as loess
 import time
 import math
+import traceback
 
 pd.options.mode.chained_assignment = None
 
@@ -83,7 +84,7 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
                                  & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
     if thesemut.shape[0] == 0:
         return thesemut
-    
+
     thesemut = np.sort(thesemut)
     IDs.remove(id)
 
@@ -370,13 +371,20 @@ if __name__ == '__main__':
         # span = 0.01
         span = 0.1
         while not success:
+            if span > 1:
+                logger.warning("Could not fit loess model for chromosome {0}".format(chrom))
+                break
             try:
                 # todo: currently loess loops infinitely for span that is too small
                 model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
                 model.fit()
                 success = True
             except:
+                traceback.print_exc()
                 span += 0.02
+
+        if not success:
+            continue
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
