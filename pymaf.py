@@ -29,6 +29,7 @@ class MAF():
 
         # Remove synonymous variants
         nonSyn_df = maf_df[maf_df['Variant_Classification'].isin(nonSilentVars)]
+        nonSyn_df['Chromosome'] = nonSyn_df['Chromosome'].astype(str)
         syn_df = maf_df[~maf_df['Variant_Classification'].isin(nonSilentVars)]
 
         return nonSyn_df, syn_df

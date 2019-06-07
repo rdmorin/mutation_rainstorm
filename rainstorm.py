@@ -100,10 +100,16 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     # need to mark all-NA positions for removal and removal of corresponding position in thesemut
     # this command removes any patient that contributed only NAs to the matrix
 
-    allna = pd.isnull(distmat).all(1).to_numpy().nonzero()[0]
-    if len(allna) > 0:
-        distmat = distmat.drop(index=allna)
-        thesemut = np.delete(thesemut, allna)
+    # Remove positions with only NA
+    allna_pos = distmat.columns[distmat.isna().all()].tolist()
+    if len(allna_pos) > 0:
+        distmat = distmat.drop(columns=allna_pos)
+        thesemut = np.delete(thesemut, allna_pos)
+
+    # Remove patients with only NA
+    allna_pat = pd.isnull(distmat).all(1).to_numpy().nonzero()[0]
+    if len(allna_pat) > 0:
+        distmat = distmat.drop(index=allna_pat)
 
     distsort = np.sort(distmat.values.transpose())
     # print(table(unlist(lapply(distsort,length))==0))
@@ -119,7 +125,7 @@ def runByCaseSmooth_multiprocess(case, maf, model, variants, IDs, chrom, start, 
 
 def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=0.3, offby=3):
     start_time = time.time()
-    stored_all = dict()
+    stored_all = {'mutdiff': [], 'position': [], 'mutrate': [], 'mutrate_noadj': [], 'patient': []}
     use_mean = True
 
     these = getMinDistByGenome(maf, case, chrom, IDs.tolist(), start, end, offby=offby, use_mean=use_mean)
@@ -281,6 +287,7 @@ if __name__ == '__main__':
 
     goodchrom = chrlengths['Chromosome'].values
 
+    cols = {'Chromosome': }
     snvs_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
     snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     snvs_df['End'] += 1
@@ -353,6 +360,9 @@ if __name__ == '__main__':
         start = 1
         end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
+        if data.empty:
+            logger.warning("No bins with mutations on chromosome {0}".format(chrom))
+            continue
         # model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
         success = False
         # span = 0.01
@@ -383,7 +393,7 @@ if __name__ == '__main__':
             j = 1
 
             for case in IDs[50:100]:
-                all_data_all_patients[case] = runByCaseSmooth(case, maf, model ,variants, IDs, chrom, start, end,
+                all_data_all_patients[case] = runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
                                                               param.nathresh, offby=param.off_by)
 
                 end_time = time.time()
