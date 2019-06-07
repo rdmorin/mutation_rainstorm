@@ -287,7 +287,6 @@ if __name__ == '__main__':
 
     goodchrom = chrlengths['Chromosome'].values
 
-    cols = {'Chromosome': }
     snvs_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
     snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     snvs_df['End'] += 1
