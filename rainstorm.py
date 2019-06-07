@@ -81,6 +81,9 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     thesemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == id) & (maf.nonSyn_df['Chromosome'] == chrom)
                                  & (maf.nonSyn_df['Start_Position'] >= start)
                                  & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
+    if thesemut.shape[0] == 0:
+        return thesemut
+    
     thesemut = np.sort(thesemut)
     IDs.remove(id)
 
