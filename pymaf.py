@@ -12,7 +12,14 @@ Class storing summarizations of MAF files.
 """
 class MAF():
 
-    def __init__(self, maf):
+    def __init__(self, maf, vc=None):
+        if vc:
+            self.vc_nonSyn = vc
+        else:
+            self.vc_nonSyn = {"Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site", "Translation_Start_Site",
+                              "Nonsense_Mutation", "Nonstop_Mutation", "In_Frame_Del", "In_Frame_Ins",
+                              "Missense_Mutation"}
+
         self.nonSyn_df, self.syn_df = self.read_maf(maf)
         self.variant_count = self.variants_per_sample(self.nonSyn_df)
         self.codingVars = set(self.nonSyn_df['Variant_Classification'].unique())
@@ -23,14 +30,10 @@ class MAF():
     def read_maf(self, maf):
         maf_df = pd.read_csv(maf, sep='\t')
 
-        nonSilentVars = {"Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site", "Translation_Start_Site",
-                         "Nonsense_Mutation", "Nonstop_Mutation", "In_Frame_Del", "In_Frame_Ins",
-                         "Missense_Mutation"}
-
         # Remove synonymous variants
-        nonSyn_df = maf_df[maf_df['Variant_Classification'].isin(nonSilentVars)]
+        nonSyn_df = maf_df[maf_df['Variant_Classification'].isin(self.vc_nonSyn)]
         nonSyn_df['Chromosome'] = nonSyn_df['Chromosome'].astype(str)
-        syn_df = maf_df[~maf_df['Variant_Classification'].isin(nonSilentVars)]
+        syn_df = maf_df[~maf_df['Variant_Classification'].isin(self.vc_nonSyn)]
 
         return nonSyn_df, syn_df
 
