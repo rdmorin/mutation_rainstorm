@@ -188,14 +188,6 @@ def viewMeans(bins, cvg):
         if ind in mut_index:
             mut_loc.append(loc)
 
-    # for _,bin in bins.iterrows():
-    #     count = 0
-    #     while len(mut_loc) > 0 and bin['Start'] <= mut_loc[0] < bin['End']:
-    #         count += 1
-    #         mut_loc.popleft()
-    #     mean = float(count) / (float(bin['End']) - float(bin['Start']))
-    #     mean_per_bin.append(mean)
-
     bins['binned_score'] = 0.0
 
     for mut in mut_loc:
@@ -304,13 +296,13 @@ if __name__ == '__main__':
     snvs_df['End'] += 1
 
     if not param.calc_background:
-        bins_chr = chrlengths_pr.window(100000, tile=True)
+        binlength = param.bin_length
+        bins_chr = chrlengths_pr.window(binlength, tile=True)
 
         bincounts_all = []
         binstarts_all = []
         bincounts_chrom = []
         binstops_all = []
-        binlength = param.bin_length
 
         for chrom in goodchrom:
             logger.info("Calculating {0}".format(chrom))
