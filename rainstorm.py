@@ -287,11 +287,9 @@ if __name__ == '__main__':
           "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
     maf = pymaf.MAF(param.input_maf, vc=vc)
 
-    pdb.set_trace()
-
     # Get IDs of cases passing the max and min mutation criteria
     IDs = maf.variant_count[(maf.variant_count.Variants < param.max_mut) &
-                            (maf.variant_count.Variants > param.min_mut)]['Tumor_Sample_Barcode']
+                            (maf.variant_count.Variants > param.min_mut)]['Tumor_Sample_Barcode'].tolist()
 
     # Choice for both full and non-coding range
     if param.nonCoding:
