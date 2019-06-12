@@ -12,14 +12,14 @@ Class storing summarizations of MAF files.
 """
 class MAF():
 
-    def __init__(self, maf, vc=None):
+    def __init__(self, maf, vc=None, rdup=True):
         if vc:
             self.vc_nonSyn = vc
         else:
             self.vc_nonSyn = {"Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site", "Translation_Start_Site",
                               "Nonsense_Mutation", "Nonstop_Mutation", "In_Frame_Del", "In_Frame_Ins",
                               "Missense_Mutation"}
-
+        self.rdup = rdup
         self.nonSyn_df, self.syn_df = self.read_maf(maf)
         self.variant_count = self.variants_per_sample(self.nonSyn_df)
         self.codingVars = set(self.nonSyn_df['Variant_Classification'].unique())
@@ -28,12 +28,18 @@ class MAF():
     Reads MAF file, and returns nonsynonymous variants in a dataframe.
     """
     def read_maf(self, maf):
-        maf_df = pd.read_csv(maf, sep='\t')
+        print("Reading MAF...")
+        maf_df = pd.read_csv(maf, sep='\t', dtype={'Chromosome': str})
 
         # Remove synonymous variants
         nonSyn_df = maf_df[maf_df['Variant_Classification'].isin(self.vc_nonSyn)]
-        nonSyn_df['Chromosome'] = nonSyn_df['Chromosome'].astype(str)
         syn_df = maf_df[~maf_df['Variant_Classification'].isin(self.vc_nonSyn)]
+
+        if self.rdup:
+            duplicate_rows = nonSyn_df.duplicated(['Chromosome', 'Start_Position', 'Tumor_Sample_Barcode'])
+            nonSyn_df = nonSyn_df.loc[~duplicate_rows]
+            print("--Removed {0} duplicated variants--".format(duplicate_rows.sum()))
+
 
         return nonSyn_df, syn_df
 
