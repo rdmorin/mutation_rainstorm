@@ -250,8 +250,10 @@ if __name__ == '__main__':
                              'match the chromosome naming style used in your MAF!')
     parser.add_argument('-p', '--plot', action='store_true', default=True,
                         help='Produce rainstorm plot for each chromosome')
-    parser.add_argument('-M', '--max_mut', type=int, metavar='MAX_MUT', default=50000,
+    parser.add_argument('-max', '--max_mut', type=int, metavar='MAX_MUT', default=50000,
                         help='Genomes skipped if their total mutation load exceeds this value')
+    parser.add_argument('-min', '--min_mut', type=int, metavar='MIN_MUT', default=100,
+                        help='Genomes skipped if their total mutation load is less than this value')
     parser.add_argument('-k', '--off_by', type=int, metavar='OFF_BY', default=4,
                         help='Take mean of the distance to the k closest mutations to determine '
                              'rainstorm distance value')
@@ -260,6 +262,8 @@ if __name__ == '__main__':
                              'future runs by using this parameter')
     parser.add_argument('-na', '--nathresh', type=float, metavar='NA_THRESH', default=0.3,
                         help='Threshold for of NA to skip a patient')
+    parser.add_argument('-bin', '--bin_length', type=int, metavar='BIN_LENGTH', default=200000,
+                        help='Bin length for segmenting genome')
 
     param = parser.parse_args()
 
@@ -278,10 +282,16 @@ if __name__ == '__main__':
     chrlengths.columns = ['Chromosome', 'Start', 'End']
     chrlengths_pr = pr.PyRanges(chrlengths)
 
-    maf = pymaf.MAF(param.input_maf)
+    vc = {"3'Flank", "3'UTR", "5'Flank", "5'UTR", "Frame_Shift_Del", "Frame_Shift_Ins", "IGR", "In_Frame_Del",
+          "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
+          "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
+    maf = pymaf.MAF(param.input_maf, vc=vc)
 
-    # Get IDs of cases passing the max mutation criteria
-    IDs = maf.variant_count[maf.variant_count.Variants < param.max_mut]['Tumor_Sample_Barcode']
+    pdb.set_trace()
+
+    # Get IDs of cases passing the max and min mutation criteria
+    IDs = maf.variant_count[(maf.variant_count.Variants < param.max_mut) &
+                            (maf.variant_count.Variants > param.min_mut)]['Tumor_Sample_Barcode']
 
     # Choice for both full and non-coding range
     if param.nonCoding:
@@ -302,7 +312,7 @@ if __name__ == '__main__':
         binstarts_all = []
         bincounts_chrom = []
         binstops_all = []
-        binlength = 100000
+        binlength = param.bin_length
 
         for chrom in goodchrom:
             logger.info("Calculating {0}".format(chrom))
@@ -366,10 +376,8 @@ if __name__ == '__main__':
         if data.empty:
             logger.warning("No bins with mutations on chromosome {0}".format(chrom))
             continue
-        # model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
         success = False
-        # span = 0.01
-        span = 0.1
+        span = 0.05
         while not success:
             if span > 1:
                 logger.warning("Could not fit loess model for chromosome {0}".format(chrom))
