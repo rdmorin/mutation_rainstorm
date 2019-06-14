@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 import os
+import sys
 import logging
 import pymaf
 import skmisc.loess as loess
@@ -22,6 +23,20 @@ import traceback
 pd.options.mode.chained_assignment = None
 
 logger = logging.getLogger()
+
+
+"""
+Progress bar
+"""
+def progress(count, total, status=''):
+    bar_len = 60
+    filled_len = int(round(bar_len * count / float(total)))
+
+    percents = round(100.0 * count / float(total), 1)
+    bar = '=' * filled_len + '-' * (bar_len - filled_len)
+
+    sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', status))
+
 
 """
 Correct local mutation rate
@@ -319,6 +334,7 @@ if __name__ == '__main__':
             # r <- runsum(cvg, 1) --> doesn't actually do anything?
 
             for num in range(len(IDs)):
+                progress(num, len(IDs))
                 patient = IDs[num]
                 snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[0]]
 
