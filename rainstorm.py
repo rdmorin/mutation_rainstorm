@@ -32,10 +32,11 @@ def progress(count, total, status=''):
     bar_len = 60
     filled_len = int(round(bar_len * count / float(total)))
 
-    percents = round(100.0 * count / float(total), 1)
+    percents = round(100.1 * count / float(total), 1)
     bar = '=' * filled_len + '-' * (bar_len - filled_len)
 
-    sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', status))
+    sys.stdout.write('[%s] %s%s %s\r' % (bar, percents, '%', status))
+    sys.stdout.flush()
 
 
 """
@@ -137,17 +138,19 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     return pd.DataFrame({'position': thesemut, 'mindist': keepdist})
 
 
-def runByCaseSmooth_multiprocess(case, maf, model, variants, IDs, chrom, start, end, nathres=0.3, offby=3):
-    output = runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres, offby)
+def runByCaseSmooth_multiprocess(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, offby=3):
+    output = runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres, offby)
     return case, output
 
 
-def runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end, nathres=0.3, offby=3):
+def runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, offby=3):
     start_time = time.time()
+    model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
+    model.fit()
     stored_all = {'mutdiff': [], 'position': [], 'mutrate': [], 'mutrate_noadj': [], 'patient': []}
     use_mean = True
 
-    these = getMinDistByGenome(maf, case, chrom, IDs.tolist(), start, end, offby=offby, use_mean=use_mean)
+    these = getMinDistByGenome(maf, case, chrom, IDs, start, end, offby=offby, use_mean=use_mean)
 
     if these.shape[0] == 0:
         logger.info("Skip due to lack of mutations on chromosome {0}".format(case))
@@ -401,9 +404,12 @@ if __name__ == '__main__':
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
-            outputs = [pool.apply(runByCaseSmooth_multiprocess, args=(case, maf, model, variants, IDs, chrom, start,
-                                                                      end, param.nathresh, param.off_by))
+            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf, data, span, IDs, chrom, start,
+                                                                                end, param.nathresh, param.off_by))
                        for case in IDs]
+            outputs = [j.get() for j in result_objs]
+            pool.close()
+            pool.join()
             all_data_all_patients = dict(outputs)
             # all_data_all_patients = {case: runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
             #                                                param.nathres, param.off_by)
@@ -450,5 +456,4 @@ if __name__ == '__main__':
                                     'mutdiff': mutdiff})
         filename = "{0}_rainstorm_k_{1}_mean_{2}.tsv".format(param.output_base_name, param.off_by, chrom)
         all_counted.to_csv(filename, sep='\t', )
-        # write.table(allcounted,file=filen,sep="\t",quote=F);
         # plotRainstorm(allcounted,gsub(".tsv",".pdf",filen));
