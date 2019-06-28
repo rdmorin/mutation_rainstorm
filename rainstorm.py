@@ -195,19 +195,23 @@ def runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, 
 
 
 def viewMeans(bins, muts):
-    # mut_index = cvg.values.nonzero()[0]
-    # mut_loc = []
-    # loc = 0
-    #
-    # for ind, run in enumerate(cvg.runs):
-    #     loc += run
-    #     if ind in mut_index:
-    #         mut_loc.append(loc)
-
     bins['binned_score'] = 0.0
+    muts.sort()
+    mut_index = 0
+    complete = False
 
-    for mut in muts:
-        bins.loc[(bins['Start'] <= mut) & (bins['End'] > mut), 'binned_score'] += 1
+    # for mut in muts:
+    #     bins.loc[(bins['Start'] <= mut) & (bins['End'] > mut), 'binned_score'] += 1
+
+    for index,bin in bins.iterrows():
+        while bin['Start'] <= muts[mut_index] < bin['End']:
+            bins.loc[index, 'binned_score'] += 1
+            mut_index += 1
+            if mut_index >= len(muts):
+                complete = True
+                break
+        if complete:
+            break
 
     mask = (bins['binned_score'] != 0.0)
     bins_valid = bins[mask]
@@ -219,12 +223,6 @@ def viewMeans(bins, muts):
 
 
 def binnedAverage(bins, muts):
-    # bins_per_chrom = {chrom: chrom_df for chrom, chrom_df in bins.df.groupby('Chromosome')}
-    # means_list = []
-
-    # for chrom in bins_per_chrom.keys():
-    #     means_list += viewMeans(bins_per_chrom[chrom], cvg[chrom])
-    # bins.binned_score = means_list
     bins.binned_score = viewMeans(bins.df, muts)
     return bins
 
@@ -307,13 +305,16 @@ if __name__ == '__main__':
 
     goodchrom = chrlengths['Chromosome'].values
 
-    snvs_df = maf.nonSyn_df[['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+    snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Variant_Classification'].isin(variants)) &
+                                (maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
+                                (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
+                                ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
     snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     # snvs_df['Start'] -= 1
 
     if not param.calc_background:
         binlength = param.bin_length
-        bins_chr = chrlengths_pr.window(binlength, tile=True)
+        bins_chr = chrlengths_pr.windows(binlength, tile=True)
 
         bincounts_all = []
         binstarts_all = []
@@ -325,31 +326,26 @@ if __name__ == '__main__':
             patient = IDs[0]
             snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[0]]
             snvs_df_subset_chrom = snvs_df_subset.loc[snvs_df_subset['Chromosome'] == chrom, 'Start'].tolist()
-            # snvs_subset = pr.PyRanges(snvs_df_subset)
 
-            # cvg = snvs_subset.coverage()
             npat_tot = snvs_df_subset.shape[0]
 
             tile = binnedAverage(bins_chr[chrom], snvs_df_subset_chrom)
             ntile = len(tile[chrom].df['binned_score'])
             testmat = np.empty((ntile, len(IDs)))
 
-            # r <- runsum(cvg, 1) --> doesn't actually do anything?
-
             for num in range(len(IDs)):
                 progress(num, len(IDs))
                 patient = IDs[num]
-                snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[0]]
+                snvs_df_subset = snvs_df.loc[snvs_df['Tumor_Sample_Barcode'] == IDs[num]]
+                snvs_df_subset_chrom = snvs_df_subset.loc[snvs_df_subset['Chromosome'] == chrom, 'Start'].tolist()
 
-                # cvg = snvs_subset.coverage()
                 npat_tot = snvs_df_subset.shape[0]
 
                 tile = binnedAverage(bins_chr[chrom], snvs_df_subset_chrom)
                 a = tile[chrom].df['binned_score']
                 testmat[:, num] = a[:ntile]
 
-                # r <- runsum(cvg, 1) --> doesn't actually do anything?
-
+            pdb.set_trace()
             means = np.mean(testmat, axis=1)
             means *= 0.000000001
 
