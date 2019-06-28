@@ -45,7 +45,6 @@ Correct local mutation rate
 Uses a loess model that fits a smoothed curve to the mutation rate across the chromosome
 """
 def correctLocalMutrate(positions, distval, model, logged_mutrate):
-    # predrate =  predict(model,newdata=data.frame(starts=positions))
     predrate = model.predict(positions)
     adjusted = np.log(distval + predrate.values + logged_mutrate)
     return adjusted
@@ -68,6 +67,8 @@ def getMutDists(pos1, pos2):
     sorted = these.sort_values('mut')
     diffs = sorted.iloc[:-1]
     diffs.loc[:, 'mut'] = np.diff(sorted['mut'])
+    # Assign naming to match the left index (instead of the right)
+    diffs['names'] = sorted['names']
     # Determine adjacencies in the same genome (to mask out as NA)
     sorted['names_shifted'] = sorted['names'].shift(-1)
     adjacents = sorted.index[sorted['names'] == sorted['names_shifted']].tolist()
@@ -112,7 +113,7 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
                                      & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
         thosemut = np.sort(thosemut)
         all_dists[case] = getMutDists(thesemut, thosemut)
-
+    pdb.set_trace()
     distmat = pd.DataFrame(np.vstack([i for i in all_dists.values()]))
 
     # before removing any cases where every value is NA,
@@ -132,7 +133,6 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
         distmat = distmat.drop(index=allna_pat)
 
     distsort = np.sort(distmat.values.transpose())
-    # print(table(unlist(lapply(distsort,length))==0))
     keepdist = np.apply_along_axis(offby_mutations, 1, distsort, offby=offby, use_mean=use_mean)
     IDs.append(id)
     return pd.DataFrame({'position': thesemut, 'mindist': keepdist})
@@ -158,19 +158,16 @@ def runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, 
 
     density_table = these.isna()
     density_table_true = density_table['position'].sum() + density_table['mindist'].sum()
-    density_table_false = (len(density_table) - density_table['position'].sum()) + \
-                          (len(density_table) - density_table['mindist'].sum())
+    density_table_false = len(density_table) - density_table_true
 
     if density_table_false > 0 and density_table_true > 0:
-        if density_table_false / density_table_true > nathres:
+        if density_table_true / density_table_false > nathres:
             logger.info("Skip due to high NA count {0}".format(case))
             return stored_all
 
     tot = these.shape[0]
     genometot = maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants']
-    # genometot = maf.full @ variants.per.sample[Tumor_Sample_Barcode == case, Variants]
     ltot = math.log(genometot / 280000000)
-    # ltot = log(genometot / 280000000)
     logger.debug("Shifting by {0}, {1}".format(genometot, ltot))
     napos = these['mindist'].index[these['mindist'].apply(np.isnan)].tolist()
     these_keep = these.drop(index=napos)
@@ -199,9 +196,6 @@ def viewMeans(bins, muts):
     muts.sort()
     mut_index = 0
     complete = False
-
-    # for mut in muts:
-    #     bins.loc[(bins['Start'] <= mut) & (bins['End'] > mut), 'binned_score'] += 1
 
     for index,bin in bins.iterrows():
         while bin['Start'] <= muts[mut_index] < bin['End']:
@@ -314,7 +308,7 @@ if __name__ == '__main__':
 
     if not param.calc_background:
         binlength = param.bin_length
-        bins_chr = chrlengths_pr.windows(binlength, tile=True)
+        bins_chr = chrlengths_pr.window(binlength, tile=True)
 
         bincounts_all = []
         binstarts_all = []
@@ -345,7 +339,6 @@ if __name__ == '__main__':
                 a = tile[chrom].df['binned_score']
                 testmat[:, num] = a[:ntile]
 
-            pdb.set_trace()
             means = np.mean(testmat, axis=1)
             means *= 0.000000001
 
@@ -387,7 +380,6 @@ if __name__ == '__main__':
                 logger.warning("Could not fit loess model for chromosome {0}".format(chrom))
                 break
             try:
-                # todo: currently loess loops infinitely for span that is too small
                 model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
                 model.fit()
                 success = True
@@ -400,26 +392,23 @@ if __name__ == '__main__':
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
-            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf, data, span, IDs, chrom, start,
-                                                                                end, param.nathresh, param.off_by))
+            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf, data, span, IDs, chrom,
+                                                                                start, end, param.nathresh,
+                                                                                param.off_by))
                        for case in IDs]
             outputs = [j.get() for j in result_objs]
             pool.close()
             pool.join()
             all_data_all_patients = dict(outputs)
-            # all_data_all_patients = {case: runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
-            #                                                param.nathres, param.off_by)
-            #                          for case in IDs}  # parallelize this
         else:
             start_time = time.time()
             case_times = {}
             all_data_all_patients = {}
             lu = len(IDs)
             j = 1
-
-            for case in IDs[50:100]:
-                all_data_all_patients[case] = runByCaseSmooth(case, maf, model, variants, IDs, chrom, start, end,
-                                                              param.nathresh, offby=param.off_by)
+            for case in IDs:
+                all_data_all_patients[case] = runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end,
+                                                              param.nathresh, param.off_by)
 
                 end_time = time.time()
                 duration = end_time - start_time
