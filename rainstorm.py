@@ -113,7 +113,6 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
                                      & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
         thosemut = np.sort(thosemut)
         all_dists[case] = getMutDists(thesemut, thosemut)
-    pdb.set_trace()
     distmat = pd.DataFrame(np.vstack([i for i in all_dists.values()]))
 
     # before removing any cases where every value is NA,
@@ -122,7 +121,7 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     # this command removes any patient that contributed only NAs to the matrix
 
     # Remove positions with only NA
-    allna_pos = distmat.columns[distmat.isna().all()].tolist()
+    allna_pos = distmat.columns[distmat.notna().sum(0) < 2].tolist()
     if len(allna_pos) > 0:
         distmat = distmat.drop(columns=allna_pos)
         thesemut = np.delete(thesemut, allna_pos)
@@ -131,7 +130,7 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     allna_pat = pd.isnull(distmat).all(1).to_numpy().nonzero()[0]
     if len(allna_pat) > 0:
         distmat = distmat.drop(index=allna_pat)
-
+    pdb.set_trace()
     distsort = np.sort(distmat.values.transpose())
     keepdist = np.apply_along_axis(offby_mutations, 1, distsort, offby=offby, use_mean=use_mean)
     IDs.append(id)
@@ -197,15 +196,16 @@ def viewMeans(bins, muts):
     mut_index = 0
     complete = False
 
-    for index,bin in bins.iterrows():
-        while bin['Start'] <= muts[mut_index] < bin['End']:
-            bins.loc[index, 'binned_score'] += 1
-            mut_index += 1
-            if mut_index >= len(muts):
-                complete = True
+    if len(muts) != 0:
+        for index, bin in bins.iterrows():
+            while bin['Start'] <= muts[mut_index] < bin['End']:
+                bins.loc[index, 'binned_score'] += 1
+                mut_index += 1
+                if mut_index >= len(muts):
+                    complete = True
+                    break
+            if complete:
                 break
-        if complete:
-            break
 
     mask = (bins['binned_score'] != 0.0)
     bins_valid = bins[mask]
