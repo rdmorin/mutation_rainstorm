@@ -92,13 +92,11 @@ def offby_mutations(x, offby=3, use_mean=True):
 """
 Calls getMutDists() on all cases for a single index case (ID)
 """
-def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
+def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
     # Extract mutations in region for this genome and compute the N-closest minimum distance to each variant among all
     # genomes (default N, 2). Self is ignored, nearest genome is ignored.
 
-    thesemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == id) & (maf.nonSyn_df['Chromosome'] == chrom)
-                                 & (maf.nonSyn_df['Start_Position'] >= start)
-                                 & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
+    thesemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == id)]['Start_Position'].values
     if thesemut.shape[0] == 0:
         return thesemut
 
@@ -107,10 +105,7 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
 
     all_dists = dict()
     for case in IDs:
-        thosemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == case)
-                                     & (maf.nonSyn_df['Chromosome'] == chrom)
-                                     & (maf.nonSyn_df['Start_Position'] >= start)
-                                     & (maf.nonSyn_df['End_Position'] < end)]['Start_Position'].values
+        thosemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == case)]['Start_Position'].values
         thosemut = np.sort(thosemut)
         all_dists[case] = getMutDists(thesemut, thosemut)
     distmat = pd.DataFrame(np.vstack([i for i in all_dists.values()]))
@@ -137,19 +132,19 @@ def getMinDistByGenome(maf, id, chrom, IDs, start, end, offby=3, use_mean=True):
     return pd.DataFrame({'position': thesemut, 'mindist': keepdist})
 
 
-def runByCaseSmooth_multiprocess(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, offby=3):
-    output = runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres, offby)
+def runByCaseSmooth_multiprocess(case, maf, data, span, IDs, nathres=0.3, offby=3):
+    output = runByCaseSmooth(case, maf, data, span, IDs, nathres, offby)
     return case, output
 
 
-def runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, offby=3):
+def runByCaseSmooth(case, maf, data, span, IDs, nathres=0.3, offby=3):
     start_time = time.time()
     model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
     model.fit()
     stored_all = {'mutdiff': [], 'position': [], 'mutrate': [], 'mutrate_noadj': [], 'patient': []}
     use_mean = True
 
-    these = getMinDistByGenome(maf, case, chrom, IDs, start, end, offby=offby, use_mean=use_mean)
+    these = getMinDistByGenome(maf, case, IDs, offby=offby, use_mean=use_mean)
 
     if these.shape[0] == 0:
         logger.info("Skip due to lack of mutations on chromosome {0}".format(case))
@@ -164,13 +159,11 @@ def runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end, nathres=0.3, 
             logger.info("Skip due to high NA count {0}".format(case))
             return stored_all
 
-    tot = these.shape[0]
     genometot = maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants']
     ltot = math.log(genometot / 280000000)
     logger.debug("Shifting by {0}, {1}".format(genometot, ltot))
     napos = these['mindist'].index[these['mindist'].apply(np.isnan)].tolist()
     these_keep = these.drop(index=napos)
-    nonatot = these_keep.shape[0]
 
     # Should we get rid of all NA values first? Seems reasonable since they're being counted here in the denominator?
     # Though they are in fact mutations, so maybe not...
@@ -195,9 +188,9 @@ def viewMeans(bins, muts):
     muts.sort()
     mut_index = 0
     complete = False
-
+    
     if len(muts) != 0:
-        for index, bin in bins.iterrows():
+        for index,bin in bins.iterrows():
             while bin['Start'] <= muts[mut_index] < bin['End']:
                 bins.loc[index, 'binned_score'] += 1
                 mut_index += 1
@@ -207,18 +200,25 @@ def viewMeans(bins, muts):
             if complete:
                 break
 
-    mask = (bins['binned_score'] != 0.0)
-    bins_valid = bins[mask]
-
-    bins.loc[mask, 'binned_score'] /= (bins_valid['End'] - bins_valid['Start'])
-
-    # return mean_per_bin
     return bins['binned_score'].values.tolist()
 
 
 def binnedAverage(bins, muts):
     bins.binned_score = viewMeans(bins.df, muts)
     return bins
+
+
+def multiprocess_binning(snvs_df_subset, id, goodchrom, variant_count):
+    logger.info('Binning {0}'.format(id))
+    scores = []
+    for chrom in goodchrom:
+        snvs_df_subset_chrom = snvs_df_subset.loc[snvs_df_subset['Chromosome'] == chrom, 'Start'].tolist()
+        scored_bins = binnedAverage(bins_chr[chrom], snvs_df_subset_chrom)
+        scores += scored_bins.df['binned_score'].tolist()
+    scores = pd.Series(scores, index=cols)
+    scores.name = id
+    scores = scores / variant_count.loc[variant_count['Tumor_Sample_Barcode'] == id, 'Variants'].values[0]
+    return scores
 
 
 def plotRainstorm(points, name):
@@ -360,10 +360,6 @@ if __name__ == '__main__':
         all_df = pd.read_csv(param.output_base_name+'_background_100k_binned_density.tsv', sep='\t')
 
     n = len(IDs) + 22
-    '''
-    cols=colors()[c(23:n)]
-    names(cols) = use.cases
-    '''
 
     for chrom in goodchrom:
         logger.info("Running calculation for {0}".format(str(chrom)))
@@ -392,9 +388,10 @@ if __name__ == '__main__':
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
-            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf, data, span, IDs, chrom,
-                                                                                start, end, param.nathresh,
-                                                                                param.off_by))
+            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                      & (maf.nonSyn_df['End_Position'] < end)], 
+                                                                                data, span, IDs, param.nathresh, param.off_by))
                        for case in IDs]
             outputs = [j.get() for j in result_objs]
             pool.close()
@@ -407,8 +404,10 @@ if __name__ == '__main__':
             lu = len(IDs)
             j = 1
             for case in IDs:
-                all_data_all_patients[case] = runByCaseSmooth(case, maf, data, span, IDs, chrom, start, end,
-                                                              param.nathresh, param.off_by)
+                all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                      & (maf.nonSyn_df['End_Position'] < end)], 
+                                                              data, span, IDs, param.nathresh, param.off_by)
 
                 end_time = time.time()
                 duration = end_time - start_time
