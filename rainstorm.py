@@ -131,12 +131,12 @@ def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
     return pd.DataFrame({'position': thesemut, 'mindist': keepdist})
 
 
-def runByCaseSmooth_multiprocess(case, maf, data, span, IDs, nathres=0.3, offby=3):
+def runByCaseSmooth_multiprocess(case, maf, genometot, data, span, IDs, nathres=0.3, offby=3):
     output = runByCaseSmooth(case, maf, data, span, IDs, nathres, offby)
     return case, output
 
 
-def runByCaseSmooth(case, maf, data, span, IDs, nathres=0.3, offby=3):
+def runByCaseSmooth(case, maf, genometat, data, span, IDs, nathres=0.3, offby=3):
     start_time = time.time()
     model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
     model.fit()
@@ -158,7 +158,6 @@ def runByCaseSmooth(case, maf, data, span, IDs, nathres=0.3, offby=3):
             logger.info("Skip due to high NA count {0}".format(case))
             return stored_all
 
-    genometot = maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants']
     ltot = math.log(genometot / 280000000)
     logger.debug("Shifting by {0}, {1}".format(genometot, ltot))
     napos = these['mindist'].index[these['mindist'].apply(np.isnan)].tolist()
@@ -389,7 +388,8 @@ if __name__ == '__main__':
             pool = mp.Pool(processes=param.cpu_num)
             result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
                                                                                       & (maf.nonSyn_df['Start_Position'] >= start)
-                                                                                      & (maf.nonSyn_df['End_Position'] < end)], 
+                                                                                      & (maf.nonSyn_df['End_Position'] < end)],
+                                                                                maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'], 
                                                                                 data, span, IDs, param.nathresh, param.off_by))
                        for case in IDs]
             outputs = [j.get() for j in result_objs]
@@ -406,6 +406,7 @@ if __name__ == '__main__':
                 all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
                                                                                       & (maf.nonSyn_df['Start_Position'] >= start)
                                                                                       & (maf.nonSyn_df['End_Position'] < end)], 
+                                                              maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
                                                               data, span, IDs, param.nathresh, param.off_by)
 
                 end_time = time.time()
