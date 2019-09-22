@@ -96,7 +96,7 @@ def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
     # Extract mutations in region for this genome and compute the N-closest minimum distance to each variant among all
     # genomes (default N, 2). Self is ignored, nearest genome is ignored.
 
-    thesemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == id)]['Start_Position'].values
+    thesemut = maf.loc[(maf['Tumor_Sample_Barcode'] == id)]['Start_Position'].values
     if thesemut.shape[0] == 0:
         return thesemut
 
@@ -105,7 +105,7 @@ def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
 
     all_dists = dict()
     for case in IDs:
-        thosemut = maf.nonSyn_df.loc[(maf.nonSyn_df['Tumor_Sample_Barcode'] == case)]['Start_Position'].values
+        thosemut = maf.loc[(maf['Tumor_Sample_Barcode'] == case)]['Start_Position'].values
         thosemut = np.sort(thosemut)
         all_dists[case] = getMutDists(thesemut, thosemut)
     distmat = pd.DataFrame(np.vstack([i for i in all_dists.values()]))
@@ -125,7 +125,6 @@ def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
     allna_pat = pd.isnull(distmat).all(1).to_numpy().nonzero()[0]
     if len(allna_pat) > 0:
         distmat = distmat.drop(index=allna_pat)
-    pdb.set_trace()
     distsort = np.sort(distmat.values.transpose())
     keepdist = np.apply_along_axis(offby_mutations, 1, distsort, offby=offby, use_mean=use_mean)
     IDs.append(id)
