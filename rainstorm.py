@@ -132,11 +132,11 @@ def getMinDistByGenome(maf, id, IDs, offby=3, use_mean=True):
 
 
 def runByCaseSmooth_multiprocess(case, maf, genometot, data, span, IDs, nathres=0.3, offby=3):
-    output = runByCaseSmooth(case, maf, data, span, IDs, nathres, offby)
+    output = runByCaseSmooth(case, maf, genometot, data, span, IDs, nathres, offby)
     return case, output
 
 
-def runByCaseSmooth(case, maf, genometat, data, span, IDs, nathres=0.3, offby=3):
+def runByCaseSmooth(case, maf, genometot, data, span, IDs, nathres=0.3, offby=3):
     start_time = time.time()
     model = loess.loess(data['starts'], data['counts'], span=span, surface='direct')
     model.fit()
