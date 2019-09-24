@@ -39,6 +39,10 @@ parser$add_argument("--plot","-p",help="ploduce rainstorm plot for each chromoso
 parser$add_argument(
 "--max_mut","-M",help="genomes skipped if their total mutation load exceeds this value",default=50000
 );
+
+parser$add_argument(
+    "--min_mut",help="genomes skipped if their total mutation load exceeds this value",default=100
+    );
 parser$add_argument(
            "--off_by","-k",help="take mean of the distance to the k closest mutations to determine rainstorm distance value", default=4)
 
@@ -53,11 +57,13 @@ cpu.num=as.integer(args$cpu_num);
 calc.background = as.integer(args$calc_background);
 basename = args$output_base_name;
 mutcount.max = as.integer(args$max_mut);
+mutcount.min = as.integer(args$min_mut);
 nonCodingFlag = as.integer(args$nonCoding);
 
 if(!is.null(genome.fai)){
     genomedetails = read.table(genome.fai,sep="\t")
     print(genomedetails);
+    print("=============================");
     chrlengths  = genomedetails[,2];
     names(chrlengths) = genomedetails[,1];
 }else{
@@ -66,11 +72,13 @@ if(!is.null(genome.fai)){
 }
 
 maf.file = args$input_maf
-maf.full = read.maf(maf.file,useAll = T, removeSilent = F)
+
+vc = c("3'Flank","3'UTR","5'Flank","5'UTR","Frame_Shift_Del","Frame_Shift_Ins","IGR","In_Frame_Del","In_Frame_Ins","Intron","Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","RNA","Silent","Splice_Region","Splice_Site","Translation_Start_Site","Variant_Classification")
+maf.full = read.maf(maf.file,useAll = T, vc_nonSyn=vc)  #removeSilent is no longer needed in newer Maftools versions but we need to explicitly say what classes we consider nonsynonymous. Here, we are specifying everything. 
 
 #get IDs of cases passing the max mutation criteria
-use.cases = as.character(maf.full@variants.per.sample[Variants<mutcount.max,Tumor_Sample_Barcode])
-                                       
+#use.cases = as.character(maf.full@variants.per.sample[Variants<mutcount.max,Tumor_Sample_Barcode])
+use.cases = as.character(maf.full@variants.per.sample[which(maf.full@variants.per.sample$Variants<mutcount.max & maf.full@variants.per.sample$Variants>mutcount.min),Tumor_Sample_Barcode])
 
 
 #latest version of the function to correct local mutation rate. This uses a loess model that fits a smoothed curve to the mutation rate across the chromosome
@@ -150,23 +158,22 @@ if(nonCodingFlag == 1){
 }
 
 #calls the getMutDists function on all cases for a single index case (id)
-getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=3,usemean=TRUE){
+getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=off.by,usemean=TRUE){
   #extract mutations in region for this genome and compute the N-closest minimum distance to each variant among all genomes (default N, 2). Self is ignored, nearest genome is ignored.
   ### back to noncoding only
-  thesemut = as.data.frame(maf@data[Tumor_Sample_Barcode==id & Variant_Classification %in% noncoding & Chromosome == chromosome & Start_Position > start & Start_Position < end,Start_Position])[,1]
+  thesemut = as.data.frame(maf@data[Tumor_Sample_Barcode==id & Chromosome == chromosome & Start_Position > start & Start_Position < end,Start_Position])[,1]
   thesemut = thesemut[order(thesemut)]
   thisind = which(use.cases %in% id)
-  
-  alldists = lapply(use.cases[-thisind],function(x){
-      thosemut = as.data.frame(maf@data[Tumor_Sample_Barcode==x &
-                                          Chromosome == chromosome &  
-                                          Start_Position > start & 
-                                          Start_Position < end,
-                                        Start_Position])[,1];
-        thosemut=thosemut[order(thosemut)]
-        getMutDists1(thesemut,thosemut)}
-        )
- 
+   #print(head(thesemut)); 
+    alldists = lapply(use.cases[-thisind],
+                      function(x){
+                          thosemut = as.data.frame(maf@data[Tumor_Sample_Barcode==x & Chromosome == chromosome &  Start_Position > start & Start_Position < end, Start_Position])[,1];
+                          thosemut=thosemut[order(thosemut)]
+                          getMutDists1(thesemut,thosemut)
+                      }
+        );
+    
+    #print(alldists);
   #before removing any cases where every value is NA, 
   #the indexes in alldists correspond to the mutation positions in thesemut
   #need to mark all-NA positions for removal and removal of corresponding position in thesemut
@@ -175,7 +182,7 @@ getMinDistByGenome<-function(maf,id,chromosome,use.cases,start,end,offby=3,useme
   #if(length(allna)>0){
   #  alldists = alldists[-allna]
   #}
-  distmat = do.call("rbind",alldists)
+  distmat = do.call("rbind",alldists);
   
   allna = which(apply(distmat,2,function(x){
     length(which(!is.na(x) ))<2}))
@@ -214,14 +221,16 @@ snvs = GRanges(seqlengths=chrlengths,
 
 
 if(calc.background){
-#100kb bins, make size an option?
-bins.chr = tileGenome(seqlengths=chrlengths,tilewidth = 100000)
+                                        #100kb bins, make size an option?
+bin_length = 200000 #usually 100,000 is better but for low mutation burden this will hopefully work
+bins.chr = tileGenome(seqlengths=chrlengths,tilewidth = bin_length)
 
 bincounts.all = c()
 binstarts.all=c()
 bincounts.chrom=c()
 binstops.all = c()
-bin_length = 100000
+
+#goodchrom = c("3"); #temporary    
 for(chrom in goodchrom){
 
   print(chrom)
@@ -263,10 +272,20 @@ print("done calculating background correction")
 alldf = data.frame(chrom=bincounts.chrom,starts=binstarts.all,ends=binstops.all,counts=bincounts.all)
 
 write.table(alldf,file=paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",quote=F)
+    #model= loess(counts~starts,data=alldf[alldf[,1]== 3 & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
+    model= loess(counts~starts,data=alldf[alldf[,1]== goodchrom[3] & alldf[,"counts"]!=-Inf,],span=0.05,surface='direct')
+                                        #sometimes the span needs to be tweaked depending on sparseness of mutations
+chrdf =alldf[alldf[,1]==3,]
+lopoints=predict(model,newdata=chrdf)
 
+chrdf$predicted=lopoints
+ggplot(chrdf,aes(x=starts,y=counts)) + geom_point(alpha=0.4,colour='orange') + geom_line(aes(x=starts,y=predicted),colour='red') + ylim(-18,-23); #pllot out chrom3
+ggsave(file=paste(basename,"_chr3_background.pdf",sep=""),width=7,height=4)
 
 }else{
-  alldf = read.csv(paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",stringsAsFactors=F);
+    print(paste("loading ",basename,"_background_100k_binned_density.tsv",sep=""))
+    alldf = read.csv(paste(basename,"_background_100k_binned_density.tsv",sep=""),sep="\t",stringsAsFactors=F);
+    print(head(alldf));
 }
 
 ######### end of binned data part, which should not be re-run for the same disease data type ######################
@@ -281,7 +300,7 @@ runByCaseSmooth<-function(case,maf.full,background.model,use.cases,chrom,start,e
   use.mean=TRUE
  
   these = getMinDistByGenome(maf.full,case,chrom,use.cases,start,end,offby=offby,usemean=use.mean)
-  
+  print(head(these));
   if(dim(these)[1]==0){
     print(paste("skip due to lack of mutations on chromosome",case)) 
     
@@ -330,16 +349,23 @@ n=n+22
 cols=colors()[c(23:n)]
 names(cols) = use.cases
 
-nathresh = 0.3 #20% NA values. Need to make this a parameter that users can modify
-  
-  
-  
+#nathresh = 0.3 #20% NA values. Need to make this a parameter that users can modify
+nathresh = 0.9
+#chrom = 'chr1';
+#start=1
+#end = max(maf.full@data[ Chromosome == chrom,Start_Position])
+                                        #chrom = paste("chr",chrom,sep="")
+#    model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
+
+#goodchrom = c("3")
+
 for(chrom in goodchrom){
     print(paste("running calculation for",chrom));
     start=1
     end = max(maf.full@data[ Chromosome == chrom,Start_Position])
     #chrom = paste("chr",chrom,sep="")
-    model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
+    #model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.01,surface='direct')
+    model= loess(counts~starts,data=alldf[alldf[,1]== chrom & alldf[,"counts"]!=-Inf,],span=0.05,surface='direct')
     if(cpu.num > 1){
       alldat.allpatients = mclapply(use.cases,
       function(x){
@@ -352,9 +378,9 @@ for(chrom in goodchrom){
       alldat.allpatients = list();
       lu = length(use.cases);
       j =1;
-      for(thiscase in use.cases[c(51:100)]){
-        #start_time <- Sys.time()
-        
+      for(thiscase in use.cases){
+        start_time <- Sys.time()
+        print(paste("runbycaseSmooth",thiscase,"maf.full","model",use.cases,chrom,start,end,off.by,sep=" "))
         #alldat.allpatients[[thiscase]]=runByCaseSmooth(thiscase,maf.full,model,use.cases,chrom,start,end,offby=off.by,oldway=TRUE)
         alldat.allpatients[[thiscase]]=
           runByCaseSmooth(thiscase,maf.full,model,use.cases,

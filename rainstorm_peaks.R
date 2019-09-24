@@ -151,11 +151,12 @@ chrPeaks=function(chrfile, spliting, snrperCut=0.95){
   
   dat=read.table(file = chrfile, sep = '\t', header = TRUE, stringsAsFactors = F) 
   
-  #### to avoid problems, remove -inf rows
+  #### to avoid problems, remove -inf and NA rows
   itmp=which(is.infinite(dat$mutrate))
   if(length(itmp)>0){
     dat=dat[-itmp,]
   }
+  dat=dat[!is.na(dat$mutrate),]
   
   tmp=order(dat$position, dat$mutrate, decreasing = c(FALSE, FALSE))
   odat=dat[tmp,]
@@ -303,7 +304,7 @@ m2res=do.call(rbind,m2res)
 write.table(m1res, paste(outname, "waveletSummary.tsv", sep=""),sep = '\t',quote = F) 
 write.table(m2res, paste(outname, "waveletPatientDetail.tsv", sep=""),sep = '\t',quote = F) 
 
-maf.full = read.maf(maf.file,useAll = T, removeSilent = F)
+maf.full = read.maf(maf.file,useAll = T)
 mafs=data.frame(maf.full@data)
 rm(maf.full)
 gc()
