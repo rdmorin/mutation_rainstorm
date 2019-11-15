@@ -46,7 +46,7 @@ Uses a loess model that fits a smoothed curve to the mutation rate across the ch
 """
 def correctLocalMutrate(positions, distval, model, logged_mutrate):
     predrate = model.predict(positions)
-    adjusted = np.log(distval + predrate.values + logged_mutrate)
+    adjusted = np.log(distval) + predrate.values + logged_mutrate
     return adjusted
 
 

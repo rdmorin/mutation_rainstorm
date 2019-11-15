@@ -304,7 +304,9 @@ m2res=do.call(rbind,m2res)
 write.table(m1res, paste(outname, "waveletSummary.tsv", sep=""),sep = '\t',quote = F) 
 write.table(m2res, paste(outname, "waveletPatientDetail.tsv", sep=""),sep = '\t',quote = F) 
 
-maf.full = read.maf(maf.file,useAll = T)
+vc = c("3'Flank","3'UTR","5'Flank","5'UTR","Frame_Shift_Del","Frame_Shift_Ins","IGR","In_Frame_Del","In_Frame_Ins","Intron","Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","RNA","Silent","Splice_Region","Splice_Site","Translation_Start_Site")
+
+maf.full = read.maf(maf.file,useAll = T, vc_nonSyn=vc)
 mafs=data.frame(maf.full@data)
 rm(maf.full)
 gc()
