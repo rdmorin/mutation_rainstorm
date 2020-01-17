@@ -275,7 +275,7 @@ if __name__ == '__main__':
     vcf_parser = subparser.add_parser(name='vcf', parents=[parent_parser],
                                       help='Input VCFs for mutations from many patient genomes')
     vcf_parser.add_argument('vcf', type=str, metavar='VCFs', nargs='+',
-                            help='VCFs for many patient genomes')
+                            help='VCFs for many patient genomes (')
 
     param = parser.parse_args()
 
@@ -294,6 +294,8 @@ if __name__ == '__main__':
     chrlengths.columns = ['Chromosome', 'Start', 'End']
     chrlengths_pr = pr.PyRanges(chrlengths)
 
+    goodchrom = chrlengths['Chromosome'].values
+
     if param.subcommand == 'maf':
         vc = {"3'Flank", "3'UTR", "5'Flank", "5'UTR", "Frame_Shift_Del", "Frame_Shift_Ins", "IGR", "In_Frame_Del",
             "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
@@ -310,19 +312,33 @@ if __name__ == '__main__':
         else:
             variants = maf.codingVars
 
-        goodchrom = chrlengths['Chromosome'].values
-
         snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Variant_Classification'].isin(variants)) &
                                     (maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
                                     (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
                                     ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
-        snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
-        # snvs_df['Start'] -= 1
     else:
-        maf = pd.DataFrame(columns=['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode'])
+        maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
+        IDs = []
         for vcf in param.vcf:
+            var_count = 0
+            patient_id = vcf.split('.')[0]
             for variant in VCF(vcf):
-                
+                var_count += 1
+                maf = maf.append({
+                    'Chromosome': variant.CHROM,
+                    'Start_Position': variant.start,
+                    'End_Position': variant.end,
+                    'Tumor_Sample_Barcode': patient_id
+                })
+            if param.min_mut > var_count < param.max_mut:
+                IDs.append(patient_id)
+
+        snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
+                                    (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
+                                    ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+
+    snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
+    # snvs_df['Start'] -= 1
 
     if not param.calc_background:
         binlength = param.bin_length
