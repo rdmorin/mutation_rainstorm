@@ -321,6 +321,7 @@ if __name__ == '__main__':
         maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
         IDs = []
         for vcf in param.vcf:
+            logger.info('Parsing {0}'.format(vcf))
             var_count = 0
             patient_var_count = {}
             patient_id = vcf.split('.')[0]
@@ -331,7 +332,7 @@ if __name__ == '__main__':
                     'Start_Position': variant.start,
                     'End_Position': variant.end,
                     'Tumor_Sample_Barcode': patient_id
-                })
+                }, ignore_index=True)
             if param.min_mut > var_count < param.max_mut:
                 IDs.append(patient_id)
             patient_var_count[patient_id] = var_count
