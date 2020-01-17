@@ -236,8 +236,6 @@ if __name__ == '__main__':
     parent_parser.add_argument('-ll', '--loglevel', type=str, default='INFO',
                                choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                                help='Set the logging level')
-    parent_parser.add_argument('-i', '--input_maf', type=str, metavar='INPUT_MAF',
-                               help='MAF file containing mutation calls from many patient genomes')
     parent_parser.add_argument('-nc', '--nonCoding', action='store_true', default=False,
                                help='Limit to non-coding range only')
     parent_parser.add_argument('-o', '--output_base_name', type=str, metavar='OUTPUT_BASE_NAME',
@@ -275,7 +273,7 @@ if __name__ == '__main__':
     vcf_parser = subparser.add_parser(name='vcf', parents=[parent_parser],
                                       help='Input VCFs for mutations from many patient genomes')
     vcf_parser.add_argument('vcf', type=str, metavar='VCFs', nargs='+',
-                            help='VCFs for many patient genomes (')
+                            help='VCFs for many patient genomes (Patient ID/Tumor_Sample_Barcode prefixed)')
 
     param = parser.parse_args()
 
