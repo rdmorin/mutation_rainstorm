@@ -316,11 +316,13 @@ if __name__ == '__main__':
                                     (maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
                                     (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
                                     ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+
     else:
         maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
         IDs = []
         for vcf in param.vcf:
             var_count = 0
+            patient_var_count = {}
             patient_id = vcf.split('.')[0]
             for variant in VCF(vcf):
                 var_count += 1
@@ -332,10 +334,11 @@ if __name__ == '__main__':
                 })
             if param.min_mut > var_count < param.max_mut:
                 IDs.append(patient_id)
+            patient_var_count[patient_id] = var_count
 
-        snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
-                                    (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
-                                    ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+        snvs_df = maf[(maf['Chromosome'].isin(goodchrom)) &
+                      (maf['Tumor_Sample_Barcode'].isin(IDs)),
+                      ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
 
     snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     # snvs_df['Start'] -= 1
@@ -398,7 +401,10 @@ if __name__ == '__main__':
     for chrom in goodchrom:
         logger.info("Running calculation for {0}".format(str(chrom)))
         start = 1
-        end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
+        if param.subcommand == 'maf':
+            end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
+        else:
+            end = maf.loc[maf['Chromosome'] == chrom, 'Start_Position'].max()
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
         if data.empty:
             logger.warning("No bins with mutations on chromosome {0}".format(chrom))
@@ -422,12 +428,21 @@ if __name__ == '__main__':
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
-            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
-                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
-                                                                                      & (maf.nonSyn_df['End_Position'] < end)],
-                                                                                maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'], 
-                                                                                data, span, IDs, param.nathresh, param.off_by))
-                       for case in IDs]
+            if param.subcommand == 'maf':
+                result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                              & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                              & (maf.nonSyn_df['End_Position'] < end)],
+                                                                                        maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
+                                                                                        data, span, IDs, param.nathresh, param.off_by))
+                               for case in IDs]
+            else:
+                result_objs = [pool.apply_async(runByCaseSmooth_multiprocess,
+                                                args=(case, maf.loc[(maf['Chromosome'] == chrom)
+                                                                    & (maf['Start_Position'] >= start)
+                                                                    & (maf['End_Position'] < end)],
+                                                      patient_var_count[case],
+                                                      data, span, IDs, param.nathresh, param.off_by))
+                               for case in IDs]
             outputs = [j.get() for j in result_objs]
             pool.close()
             pool.join()
@@ -439,12 +454,18 @@ if __name__ == '__main__':
             lu = len(IDs)
             j = 1
             for case in IDs:
-                all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
-                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
-                                                                                      & (maf.nonSyn_df['End_Position'] < end)], 
-                                                              maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
-                                                              data, span, IDs, param.nathresh, param.off_by)
-
+                if param.subcommand == 'maf':
+                    all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                          & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                          & (maf.nonSyn_df['End_Position'] < end)],
+                                                                  maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
+                                                                  data, span, IDs, param.nathresh, param.off_by)
+                else:
+                    all_data_all_patients[case] = runByCaseSmooth(case, maf.loc[(maf['Chromosome'] == chrom)
+                                                                                & (maf['Start_Position'] >= start)
+                                                                                & (maf['End_Position'] < end)],
+                                                                  patient_var_count[case],
+                                                                  data, span, IDs, param.nathresh, param.off_by)
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info("Time for {0} was {1}".format(case, duration))
