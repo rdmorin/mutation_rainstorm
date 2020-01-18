@@ -323,18 +323,26 @@ if __name__ == '__main__':
             var_count = 0
             patient_var_count = {}
             patient_id = vcf.split('.')[0]
-            with open(vcf, 'r') as vcf_file:
-                for line in vcf_file:
-                    if not line.startswith('#'):
-                        line_split = line.split('\t')
-                        var_count += 1
-                        pdb.set_trace()
-                        maf = pd.concat([maf, pd.DataFrame.from_dict({
-                            'Chromosome': [line_split[0]],
-                            'Start_Position': [line_split[1]],
-                            'End_Position': [line_split[3]],
-                            'Tumor_Sample_Barcode': [patient_id]
-                        })], ignore_index=True)
+            # with open(vcf, 'r') as vcf_file:
+            #     for line in vcf_file:
+            #         if not line.startswith('#'):
+            #             line_split = line.split('\t')
+            #             var_count += 1
+            #             pdb.set_trace()
+            #             maf = pd.concat([maf, pd.DataFrame.from_dict({
+            #                 'Chromosome': [line_split[0]],
+            #                 'Start_Position': [line_split[1]],
+            #                 'End_Position': [line_split[3]],
+            #                 'Tumor_Sample_Barcode': [patient_id]
+            #             })], ignore_index=True)
+            for variant in VCF(vcf):
+                var_count += 1
+                maf = pd.concat([maf, pd.DataFrame.from_dict({
+                    'Chromosome': [variant.CHROM],
+                    'Start_Position': [variant.start],
+                    'End_Position': [variant.end],
+                    'Tumor_Sample_Barcode': [patient_id]
+                })], ignore_index=True)
             if param.min_mut > var_count < param.max_mut:
                 IDs.append(patient_id)
             patient_var_count[patient_id] = var_count
