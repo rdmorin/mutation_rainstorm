@@ -316,36 +316,42 @@ if __name__ == '__main__':
                                     ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
 
     else:
-        maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
         IDs = []
         for vcf in param.vcf:
             logger.info('Parsing {0}'.format(vcf))
+            all_mafs = {}
+            vcf_maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
             var_count = 0
             patient_var_count = {}
             patient_id = os.path.basename(vcf).split('.')[0]
-            # with open(vcf, 'r') as vcf_file:
-            #     for line in vcf_file:
-            #         if not line.startswith('#'):
-            #             line_split = line.split('\t')
-            #             var_count += 1
-            #             pdb.set_trace()
-            #             maf = pd.concat([maf, pd.DataFrame.from_dict({
-            #                 'Chromosome': [line_split[0]],
-            #                 'Start_Position': [line_split[1]],
-            #                 'End_Position': [line_split[3]],
-            #                 'Tumor_Sample_Barcode': [patient_id]
-            #             })], ignore_index=True)
-            for variant in VCF(vcf):
-                var_count += 1
-                maf = pd.concat([maf, pd.DataFrame.from_dict({
-                    'Chromosome': [variant.CHROM],
-                    'Start_Position': [variant.start],
-                    'End_Position': [variant.end],
-                    'Tumor_Sample_Barcode': [patient_id]
-                })], ignore_index=True)
+            with open(vcf, 'r') as vcf_file:
+                for line in vcf_file:
+                    if not line.startswith('#'):
+                        line_split = line.split('\t')
+                        var_count += 1
+                        pdb.set_trace()
+                        vcf_maf = pd.concat([vcf_maf, pd.DataFrame.from_dict({'Chromosome': [line_split[0]],
+                                                                              'Start_Position': [line_split[1]],
+                                                                              'End_Position': [int(line_split[1]) +
+                                                                                               (int(len(line_split[3]))
+                                                                                                - 1)],
+                                                                              'Tumor_Sample_Barcode': [patient_id]
+                                                                              })], ignore_index=True)
+            # for variant in VCF(vcf):
+            #     var_count += 1
+            #     maf = pd.concat([maf, pd.DataFrame.from_dict({
+            #         'Chromosome': [variant.CHROM],
+            #         'Start_Position': [variant.start],
+            #         'End_Position': [variant.end],
+            #         'Tumor_Sample_Barcode': [patient_id]
+            #     })], ignore_index=True)
             if param.min_mut > var_count < param.max_mut:
                 IDs.append(patient_id)
             patient_var_count[patient_id] = var_count
+
+            all_mafs[patient_id] = vcf_maf
+
+        maf = pd.concat(all_mafs.values(), ignore_index=True)
 
         snvs_df = maf[(maf['Chromosome'].isin(goodchrom)) &
                       (maf['Tumor_Sample_Barcode'].isin(IDs)),
