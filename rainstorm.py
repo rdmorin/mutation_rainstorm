@@ -322,7 +322,7 @@ if __name__ == '__main__':
             logger.info('Parsing {0}'.format(vcf))
             var_count = 0
             patient_var_count = {}
-            patient_id = vcf.split('.')[0]
+            patient_id = os.path.basename(vcf).split('.')[0]
             # with open(vcf, 'r') as vcf_file:
             #     for line in vcf_file:
             #         if not line.startswith('#'):
