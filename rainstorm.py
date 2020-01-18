@@ -323,14 +323,17 @@ if __name__ == '__main__':
             var_count = 0
             patient_var_count = {}
             patient_id = vcf.split('.')[0]
-            for variant in VCF(vcf):
-                var_count += 1
-                maf = maf.append({
-                    'Chromosome': variant.CHROM,
-                    'Start_Position': variant.start,
-                    'End_Position': variant.end,
-                    'Tumor_Sample_Barcode': patient_id
-                }, ignore_index=True)
+            with open(vcf, 'r') as vcf_file:
+                for line in vcf_file:
+                    if not line.startswith('#'):
+                        line_split = line.split('\t')
+                        var_count += 1
+                        maf = maf.concat({
+                            'Chromosome': line_split[0],
+                            'Start_Position': line_split[1],
+                            'End_Position': line_split[2],
+                            'Tumor_Sample_Barcode': patient_id
+                        }, ignore_index=True)
             if param.min_mut > var_count < param.max_mut:
                 IDs.append(patient_id)
             patient_var_count[patient_id] = var_count
