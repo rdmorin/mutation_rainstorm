@@ -296,8 +296,8 @@ if __name__ == '__main__':
 
     if param.subcommand == 'maf':
         vc = {"3'Flank", "3'UTR", "5'Flank", "5'UTR", "Frame_Shift_Del", "Frame_Shift_Ins", "IGR", "In_Frame_Del",
-            "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
-            "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
+              "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
+              "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
         maf = pymaf.MAF(param.input_maf, vc=vc)
 
         # Get IDs of cases passing the max and min mutation criteria
@@ -317,12 +317,12 @@ if __name__ == '__main__':
 
     else:
         IDs = []
+        all_mafs = {}
+        patient_var_count = {}
         for vcf in param.vcf:
             logger.info('Parsing {0}'.format(vcf))
-            all_mafs = {}
             vcf_maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
             var_count = 0
-            patient_var_count = {}
             patient_id = os.path.basename(vcf).split('.')[0]
             with open(vcf, 'r') as vcf_file:
                 for line in vcf_file:
@@ -353,7 +353,7 @@ if __name__ == '__main__':
 
         maf = pd.concat(all_mafs.values(), ignore_index=True)
 
-        snvs_df = maf[(maf['Chromosome'].isin(goodchrom)) &
+        snvs_df = maf.loc[(maf['Chromosome'].isin(goodchrom)) &
                       (maf['Tumor_Sample_Barcode'].isin(IDs)),
                       ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
 
