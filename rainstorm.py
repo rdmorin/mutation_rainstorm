@@ -329,9 +329,8 @@ if __name__ == '__main__':
                     if not line.startswith('#'):
                         line_split = line.split('\t')
                         var_count += 1
-                        pdb.set_trace()
                         vcf_maf = pd.concat([vcf_maf, pd.DataFrame.from_dict({'Chromosome': [line_split[0]],
-                                                                              'Start_Position': [line_split[1]],
+                                                                              'Start_Position': [int(line_split[1])],
                                                                               'End_Position': [int(line_split[1]) +
                                                                                                (int(len(line_split[3]))
                                                                                                 - 1)],
@@ -345,7 +344,7 @@ if __name__ == '__main__':
             #         'End_Position': [variant.end],
             #         'Tumor_Sample_Barcode': [patient_id]
             #     })], ignore_index=True)
-            if param.min_mut > var_count < param.max_mut:
+            if param.min_mut < var_count < param.max_mut:
                 IDs.append(patient_id)
             patient_var_count[patient_id] = var_count
 
