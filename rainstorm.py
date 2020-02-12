@@ -19,6 +19,7 @@ import skmisc.loess as loess
 import time
 import math
 import traceback
+from cyvcf2 import VCF
 
 pd.options.mode.chained_assignment = None
 
@@ -231,37 +232,48 @@ if __name__ == '__main__':
                                'Copyright (C) 2019 Ryan Morin, Aixiang Jang, Matthew Nguyen',
                                formatter_class=ap.RawTextHelpFormatter)
 
-    parser.add_argument('-ll', '--loglevel', type=str, default='INFO',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-                        help='Set the logging level')
-    parser.add_argument('-i', '--input_maf', type=str, metavar='INPUT_MAF',
-                        help='MAF file containing mutation calls from many patient genomes')
-    parser.add_argument('-nc', '--nonCoding', action='store_true', default=False,
-                        help='Limit to non-coding range only')
-    parser.add_argument('-o', '--output_base_name', type=str, metavar='OUTPUT_BASE_NAME',
-                        help='Specify a base file name prefix for all outputs')
-    parser.add_argument('-c', '--cpu_num', type=int, metavar='CPU_NUM', default=1,
-                        help='Set to number of CPUs you would like to use to perform calculation in '
-                             'parallel (consumes lots of RAM)')
-    parser.add_argument('-g', '--genome_fai', type=str, metavar='GENOME_FAI', default="hg19.ensembl.fa.fai",
-                        help='Provide the corresponding fasta index for the genome you use. Must '
-                             'match the chromosome naming style used in your MAF!')
-    parser.add_argument('-p', '--plot', action='store_true', default=True,
-                        help='Produce rainstorm plot for each chromosome')
-    parser.add_argument('-max', '--max_mut', type=int, metavar='MAX_MUT', default=50000,
-                        help='Genomes skipped if their total mutation load exceeds this value')
-    parser.add_argument('-min', '--min_mut', type=int, metavar='MIN_MUT', default=100,
-                        help='Genomes skipped if their total mutation load is less than this value')
-    parser.add_argument('-k', '--off_by', type=int, metavar='OFF_BY', default=4,
-                        help='Take mean of the distance to the k closest mutations to determine '
-                             'rainstorm distance value')
-    parser.add_argument('-b', '--calc_background', action='store_true', default=False,
-                        help='If you have done this once for a cohort, you can reload the result in '
-                             'future runs by using this parameter')
-    parser.add_argument('-na', '--nathresh', type=float, metavar='NA_THRESH', default=0.3,
-                        help='Threshold for of NA to skip a patient')
-    parser.add_argument('-bin', '--bin_length', type=int, metavar='BIN_LENGTH', default=200000,
-                        help='Bin length for segmenting genome')
+    parent_parser = ap.ArgumentParser(add_help=False)
+    parent_parser.add_argument('-ll', '--loglevel', type=str, default='INFO',
+                               choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                               help='Set the logging level')
+    parent_parser.add_argument('-nc', '--nonCoding', action='store_true', default=False,
+                               help='Limit to non-coding range only')
+    parent_parser.add_argument('-o', '--output_base_name', type=str, metavar='OUTPUT_BASE_NAME',
+                               help='Specify a base file name prefix for all outputs')
+    parent_parser.add_argument('-c', '--cpu_num', type=int, metavar='CPU_NUM', default=1,
+                               help='Set to number of CPUs you would like to use to perform calculation in '
+                                    'parallel (consumes lots of RAM)')
+    parent_parser.add_argument('-g', '--genome_fai', type=str, metavar='GENOME_FAI', default="hg19.ensembl.fa.fai",
+                               help='Provide the corresponding fasta index for the genome you use. Must '
+                                    'match the chromosome naming style used in your MAF!')
+    parent_parser.add_argument('-p', '--plot', action='store_true', default=True,
+                               help='Produce rainstorm plot for each chromosome')
+    parent_parser.add_argument('-max', '--max_mut', type=int, metavar='MAX_MUT', default=50000,
+                               help='Genomes skipped if their total mutation load exceeds this value')
+    parent_parser.add_argument('-min', '--min_mut', type=int, metavar='MIN_MUT', default=100,
+                               help='Genomes skipped if their total mutation load is less than this value')
+    parent_parser.add_argument('-k', '--off_by', type=int, metavar='OFF_BY', default=4,
+                               help='Take mean of the distance to the k closest mutations to determine '
+                                    'rainstorm distance value')
+    parent_parser.add_argument('-b', '--calc_background', action='store_true', default=False,
+                               help='If you have done this once for a cohort, you can reload the result in '
+                                    'future runs by using this parameter')
+    parent_parser.add_argument('-na', '--nathresh', type=float, metavar='NA_THRESH', default=0.3,
+                               help='Threshold for of NA to skip a patient')
+    parent_parser.add_argument('-bin', '--bin_length', type=int, metavar='BIN_LENGTH', default=200000,
+                               help='Bin length for segmenting genome')
+
+    subparser = parser.add_subparsers(help="commands", dest='subcommand')
+
+    maf_parser = subparser.add_parser(name='maf', parents=[parent_parser], 
+                                      help='Input a MAF file containing mutation calls from many patient genomes')
+    maf_parser.add_argument('maf', type=str, metavar='MAF',
+                            help='MAF file containing mutation calls from many patient genomes')
+
+    vcf_parser = subparser.add_parser(name='vcf', parents=[parent_parser],
+                                      help='Input VCFs for mutations from many patient genomes')
+    vcf_parser.add_argument('vcf', type=str, metavar='VCFs', nargs='+',
+                            help='VCFs for many patient genomes (Patient ID/Tumor_Sample_Barcode prefixed)')
 
     param = parser.parse_args()
 
@@ -280,27 +292,70 @@ if __name__ == '__main__':
     chrlengths.columns = ['Chromosome', 'Start', 'End']
     chrlengths_pr = pr.PyRanges(chrlengths)
 
-    vc = {"3'Flank", "3'UTR", "5'Flank", "5'UTR", "Frame_Shift_Del", "Frame_Shift_Ins", "IGR", "In_Frame_Del",
-          "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
-          "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
-    maf = pymaf.MAF(param.input_maf, vc=vc)
-
-    # Get IDs of cases passing the max and min mutation criteria
-    IDs = maf.variant_count[(maf.variant_count.Variants < param.max_mut) &
-                            (maf.variant_count.Variants > param.min_mut)]['Tumor_Sample_Barcode'].tolist()
-
-    # Choice for both full and non-coding range
-    if param.nonCoding:
-        variants = {"3'Flank", "IGR", "Intron", "3'UTR", "5'Flank", "5'UTR", "Targeted_Region", "RNA"}
-    else:
-        variants = maf.codingVars
-
     goodchrom = chrlengths['Chromosome'].values
 
-    snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Variant_Classification'].isin(variants)) &
-                                (maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
-                                (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
-                                ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+    if param.subcommand == 'maf':
+        vc = {"3'Flank", "3'UTR", "5'Flank", "5'UTR", "Frame_Shift_Del", "Frame_Shift_Ins", "IGR", "In_Frame_Del",
+              "In_Frame_Ins", "Intron", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "RNA", "Silent",
+              "Splice_Region", "Splice_Site", "Translation_Start_Site", "Variant_Classification"}
+        maf = pymaf.MAF(param.input_maf, vc=vc)
+
+        # Get IDs of cases passing the max and min mutation criteria
+        IDs = maf.variant_count[(maf.variant_count.Variants < param.max_mut) &
+                                (maf.variant_count.Variants > param.min_mut)]['Tumor_Sample_Barcode'].tolist()
+
+        # Choice for both full and non-coding range
+        if param.nonCoding:
+            variants = {"3'Flank", "IGR", "Intron", "3'UTR", "5'Flank", "5'UTR", "Targeted_Region", "RNA"}
+        else:
+            variants = maf.codingVars
+
+        snvs_df = maf.nonSyn_df.loc[(maf.nonSyn_df['Variant_Classification'].isin(variants)) &
+                                    (maf.nonSyn_df['Chromosome'].isin(goodchrom)) &
+                                    (maf.nonSyn_df['Tumor_Sample_Barcode'].isin(IDs)),
+                                    ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+
+    else:
+        IDs = []
+        all_mafs = {}
+        patient_var_count = {}
+        for vcf in param.vcf:
+            logger.info('Parsing {0}'.format(vcf))
+            vcf_maf = pd.DataFrame(columns=['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode'])
+            var_count = 0
+            patient_id = os.path.basename(vcf).split('.')[0]
+            with open(vcf, 'r') as vcf_file:
+                for line in vcf_file:
+                    if not line.startswith('#'):
+                        line_split = line.split('\t')
+                        var_count += 1
+                        vcf_maf = pd.concat([vcf_maf, pd.DataFrame.from_dict({'Chromosome': [line_split[0]],
+                                                                              'Start_Position': [int(line_split[1])],
+                                                                              'End_Position': [int(line_split[1]) +
+                                                                                               (int(len(line_split[3]))
+                                                                                                - 1)],
+                                                                              'Tumor_Sample_Barcode': [patient_id]
+                                                                              })], ignore_index=True)
+            # for variant in VCF(vcf):
+            #     var_count += 1
+            #     maf = pd.concat([maf, pd.DataFrame.from_dict({
+            #         'Chromosome': [variant.CHROM],
+            #         'Start_Position': [variant.start],
+            #         'End_Position': [variant.end],
+            #         'Tumor_Sample_Barcode': [patient_id]
+            #     })], ignore_index=True)
+            if param.min_mut < var_count < param.max_mut:
+                IDs.append(patient_id)
+            patient_var_count[patient_id] = var_count
+
+            all_mafs[patient_id] = vcf_maf
+
+        maf = pd.concat(all_mafs.values(), ignore_index=True)
+
+        snvs_df = maf.loc[(maf['Chromosome'].isin(goodchrom)) &
+                      (maf['Tumor_Sample_Barcode'].isin(IDs)),
+                      ['Chromosome', 'Start_Position', 'End_Position', 'Tumor_Sample_Barcode']]
+
     snvs_df.columns = ['Chromosome', 'Start', 'End', 'Tumor_Sample_Barcode']
     # snvs_df['Start'] -= 1
 
@@ -362,7 +417,10 @@ if __name__ == '__main__':
     for chrom in goodchrom:
         logger.info("Running calculation for {0}".format(str(chrom)))
         start = 1
-        end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
+        if param.subcommand == 'maf':
+            end = maf.nonSyn_df.loc[maf.nonSyn_df['Chromosome'] == chrom]['Start_Position'].max()
+        else:
+            end = maf.loc[maf['Chromosome'] == chrom, 'Start_Position'].max()
         data = all_df.loc[(all_df['chrom'] == chrom) & (all_df['counts'] != -np.inf)]
         if data.empty:
             logger.warning("No bins with mutations on chromosome {0}".format(chrom))
@@ -386,12 +444,21 @@ if __name__ == '__main__':
 
         if param.cpu_num > 1:
             pool = mp.Pool(processes=param.cpu_num)
-            result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
-                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
-                                                                                      & (maf.nonSyn_df['End_Position'] < end)],
-                                                                                maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'], 
-                                                                                data, span, IDs, param.nathresh, param.off_by))
-                       for case in IDs]
+            if param.subcommand == 'maf':
+                result_objs = [pool.apply_async(runByCaseSmooth_multiprocess, args=(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                              & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                              & (maf.nonSyn_df['End_Position'] < end)],
+                                                                                        maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
+                                                                                        data, span, IDs, param.nathresh, param.off_by))
+                               for case in IDs]
+            else:
+                result_objs = [pool.apply_async(runByCaseSmooth_multiprocess,
+                                                args=(case, maf.loc[(maf['Chromosome'] == chrom)
+                                                                    & (maf['Start_Position'] >= start)
+                                                                    & (maf['End_Position'] < end)],
+                                                      patient_var_count[case],
+                                                      data, span, IDs, param.nathresh, param.off_by))
+                               for case in IDs]
             outputs = [j.get() for j in result_objs]
             pool.close()
             pool.join()
@@ -403,12 +470,18 @@ if __name__ == '__main__':
             lu = len(IDs)
             j = 1
             for case in IDs:
-                all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
-                                                                                      & (maf.nonSyn_df['Start_Position'] >= start)
-                                                                                      & (maf.nonSyn_df['End_Position'] < end)], 
-                                                              maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
-                                                              data, span, IDs, param.nathresh, param.off_by)
-
+                if param.subcommand == 'maf':
+                    all_data_all_patients[case] = runByCaseSmooth(case, maf.nonSyn_df.loc[(maf.nonSyn_df['Chromosome'] == chrom)
+                                                                                          & (maf.nonSyn_df['Start_Position'] >= start)
+                                                                                          & (maf.nonSyn_df['End_Position'] < end)],
+                                                                  maf.variant_count.loc[maf.variant_count['Tumor_Sample_Barcode'] == case, 'Variants'],
+                                                                  data, span, IDs, param.nathresh, param.off_by)
+                else:
+                    all_data_all_patients[case] = runByCaseSmooth(case, maf.loc[(maf['Chromosome'] == chrom)
+                                                                                & (maf['Start_Position'] >= start)
+                                                                                & (maf['End_Position'] < end)],
+                                                                  patient_var_count[case],
+                                                                  data, span, IDs, param.nathresh, param.off_by)
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info("Time for {0} was {1}".format(case, duration))
