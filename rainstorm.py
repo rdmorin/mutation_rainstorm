@@ -361,7 +361,7 @@ if __name__ == '__main__':
 
     if not param.calc_background:
         binlength = param.bin_length
-        bins_chr = chrlengths_pr.window(binlength, tile=True)
+        bins_chr = pr.genomicfeatures.tile_genome(chrlengths_pr, binlength)
 
         bincounts_all = []
         binstarts_all = []
@@ -391,7 +391,8 @@ if __name__ == '__main__':
                 tile = binnedAverage(bins_chr[chrom], snvs_df_subset_chrom)
                 a = tile[chrom].df['binned_score']
                 testmat[:, num] = a[:ntile]
-
+            import pdb
+            pdb.set_trace()
             means = np.mean(testmat, axis=1)
             means *= 0.000000001
 
