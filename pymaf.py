@@ -48,7 +48,7 @@ class MAF():
     """
     def variants_per_sample(self, maf_df):
         variant_count_series = maf_df.groupby('Tumor_Sample_Barcode').size().sort_values(ascending=False)
-        del variant_count_series.index.name
+        variant_count_series = variant_count_series.rename_axis(None, axis=1)
         variant_count_df = variant_count_series.reset_index(level=0)
         variant_count_df.columns = ['Tumor_Sample_Barcode', 'Variants']
         return variant_count_df
