@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+#
 ###########################################
 #### R code for peak searching with wavelet
 #### Aixiang Jiang, Sep 28, 2017
@@ -301,8 +303,8 @@ m1res=do.call(rbind,m1res)
 m2res=finalres[m2]
 m2res=do.call(rbind,m2res)
 
-write.table(m1res, paste(outname, "waveletSummary.tsv", sep=""),sep = '\t',quote = F) 
-write.table(m2res, paste(outname, "waveletPatientDetail.tsv", sep=""),sep = '\t',quote = F) 
+write.table(m1res, paste(outname, "waveletSummary.tsv", sep=""),sep = '\t',quote = F, row.names = F)
+write.table(m2res, paste(outname, "waveletPatientDetail.tsv", sep=""),sep = '\t',quote = F, row.names = F)
 
 vc = c("3'Flank","3'UTR","5'Flank","5'UTR","Frame_Shift_Del","Frame_Shift_Ins","IGR","In_Frame_Del","In_Frame_Ins","Intron","Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","RNA","Silent","Splice_Region","Splice_Site","Translation_Start_Site")
 
@@ -356,12 +358,12 @@ mafm1res=do.call(rbind, mafm1res)
 #### remove all of the NAs
 mafm1res=mafm1res[!is.na(mafm1res$chromosome),]
 
-write.table(mafm1res,paste(outname,"waveletPatientDetail_withMaf.tsv", sep=""),sep = '\t',quote = F) 
+write.table(mafm1res,paste(outname,"waveletPatientDetail_withMaf.tsv", sep=""),sep = '\t',quote = F, row.names = F)
 
 #### get the summary one row per peak range as well
-sumres=mafm1res[,c(1:8,14:18)]
+sumres=mafm1res[,c(1:8,14:19)]
 
-tmp=unique(sumres[,c(1:4)])
+tmp=unique(sumres[,c("chromosome", "leftPosition", "rightPosition", "peakPosition")])
 getHGall=function(x){
   subdat=subset(sumres, sumres$chromosome==as.character(x[1]) & sumres$leftPosition == as.integer(x[2])
                 & sumres$rightPosition == as.integer(x[3]) & sumres$peakPosition == as.integer(x[4]))
@@ -377,7 +379,7 @@ ss=apply(tmp,1,getHGall)
 ss=do.call(rbind,ss)
 
 
-write.table(ss,paste(outname, "waveletSummary_withMaf.tsv",sep=""),sep = '\t',quote = F) 
+write.table(ss,paste(outname, "waveletSummary_withMaf.tsv",sep=""),sep = '\t',quote = F, row.names = F)
 
 
 gc()
