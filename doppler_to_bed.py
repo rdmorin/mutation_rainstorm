@@ -28,9 +28,10 @@ if __name__ == '__main__':
                         datefmt='%I:%M:%S %p')
 
     in_doppler = pd.read_csv(param.input, '\t')
-    out_bed = pd.DataFrame(in_doppler[['chromosome', 'leftPosition', 'rightPosition']])
+    out_bed = pd.DataFrame(in_doppler[['chromosome', 'leftPosition', 'rightPosition', 'mutPerKb']])
 
-    out_bed['chromosome'] = 'chr' + out_bed['chromosome'].astype(str)
+    if "chr" not in out_bed['chromosome'][1]:
+        out_bed['chromosome'] = 'chr' + out_bed['chromosome'].astype(str)
 
     out_bed.to_csv(param.output + '.BED', sep='\t', index=False, header=False)
     
