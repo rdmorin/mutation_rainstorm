@@ -19,7 +19,7 @@ if __name__ == '__main__':
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the logging level')
     parser.add_argument('input', metavar='DOPPLER_OUTPUT', help='Doppler file to filter')
-    parser.add_argument('-o', '--output', metavar='FILENAME', help='Output file prefix')
+    parser.add_argument('-o', '--output', metavar='FILENAME', help='Output file prefix or file name')
 
     param = parser.parse_args()
 
@@ -27,11 +27,17 @@ if __name__ == '__main__':
                         format='%(asctime)s (%(relativeCreated)d ms) -> %(levelname)s: %(message)s',
                         datefmt='%I:%M:%S %p')
 
+    # conditionally determine whether to add .bed extension
+    if "bed" not in str(param.output):
+        out_file = str(param.output) + '.BED'
+    else:
+        out_file = str(param.output)
+
     in_doppler = pd.read_csv(param.input, '\t')
     out_bed = pd.DataFrame(in_doppler[['chromosome', 'leftPosition', 'rightPosition', 'mutPerKb']])
 
     if "chr" not in out_bed['chromosome'][1]:
         out_bed['chromosome'] = 'chr' + out_bed['chromosome'].astype(str)
 
-    out_bed.to_csv(param.output + '.BED', sep='\t', index=False, header=False)
+    out_bed.to_csv(out_file, sep='\t', index=False, header=False)
     
